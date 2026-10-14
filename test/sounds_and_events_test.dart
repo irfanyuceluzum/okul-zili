@@ -40,7 +40,9 @@ void main() {
 
       expect(sound.name, 'Okul Zilimiz');
       expect(sound.isAsset, isFalse);
-      expect(sound.path, startsWith('${tmp.path}/ayar/sesler/'));
+      // Windows "\" kullanır; karşılaştırma ayırıcıdan bağımsız olsun.
+      String slashes(String p) => p.replaceAll(r'\', '/');
+      expect(slashes(sound.path), startsWith('${slashes(tmp.path)}/ayar/sesler/'));
       expect(File(sound.path).existsSync(), isTrue);
       source.deleteSync();
       expect(File(sound.path).existsSync(), isTrue, reason: 'asıl dosya silinse de kopya kalır');

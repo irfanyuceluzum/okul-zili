@@ -15,6 +15,7 @@ import 'data/models/calendar.dart';
 import 'data/schedule_draft.dart';
 import 'platform/audio_file_picker.dart';
 import 'platform/bell_player.dart';
+import 'platform/error_log.dart';
 import 'platform/system_services.dart';
 
 /// Ayarları, zamanlayıcıyı, ses çaları ve işletim sistemi servislerini bir
@@ -168,17 +169,23 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> updateConfig(AppConfig config) async {
+  /// Ayarı hemen geçerli kılar ve diske kaydeder; kaydedilemezse false
+  /// döner ve uyarı bandında gösterilir (ayar bellekte geçerli kalır).
+  Future<bool> updateConfig(AppConfig config) async {
     _config = config;
     _scheduler.scheduleChanged();
     notifyListeners();
+    var saved = true;
     try {
       await repository.save(config);
       _lastError = null;
-    } catch (e) {
-      _lastError = 'Ayarlar kaydedilemedi: $e';
+    } catch (e, st) {
+      saved = false;
+      _lastError = 'Ayarlar kaydedilemedi; uygulama yeniden açılınca son değişiklikler kaybolabilir. ($e)';
+      ErrorLog.write('ayar kaydı', e, st);
     }
     notifyListeners();
+    return saved;
   }
 
   Future<void> refreshAutostart() async {
@@ -233,7 +240,14 @@ class AppController extends ChangeNotifier {
     final errors = draft.validate(_config.overrides);
     if (errors.isNotEmpty) return errors;
     _scheduleDraft = null;
-    await updateConfig(_config.copyWith(templates: draft.templates, weekPlan: {...draft.weekPlan}));
+    final saved = await updateConfig(_config.copyWith(templates: draft.templates, weekPlan: {...draft.weekPlan}));
+    if (!saved) {
+      // Taslak kaybolmasın; kişi Kaydet'e tekrar basabilsin.
+      _scheduleDraft = draft..dirty = true;
+      notifyListeners();
+      return const ['Program diske kaydedilemedi. Ziller yeni programla çalıyor ama uygulama yeniden açılınca '
+          'eski programa dönebilir. Kaydet\'e tekrar basın.'];
+    }
     return const [];
   }
 
