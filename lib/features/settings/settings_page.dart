@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../app_controller.dart';
+import '../../data/config_repository.dart';
+import '../../data/models/app_config.dart';
 import '../../ui/navigation.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
@@ -61,6 +65,135 @@ class _SettingsPageState extends State<SettingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Okul adı kaydedildi')));
     }
   }
+
+  // ---- Yedekler ve taşıma --------------------------------------------------
+
+  List<BackupInfo>? _backups;
+  AppConfig? _backupsFor;
+
+  /// Yedek listesi yalnız ayar değişince yeniden okunur (diske her karede bakılmasın).
+  List<BackupInfo> _currentBackups(AppController c) {
+    if (_backups == null || !identical(_backupsFor, c.config)) {
+      try {
+        _backups = c.repository.listBackups();
+      } catch (_) {
+        _backups = const [];
+      }
+      _backupsFor = c.config;
+    }
+    return _backups!;
+  }
+
+  Widget _backupList(AppController c) {
+    final backups = _currentBackups(c);
+    if (backups.isEmpty) {
+      return const Text('Henüz yedek yok. Ayarlar ilk kez kaydedilince yedek alınır.',
+          style: TextStyle(color: AppColors.inkSecondary));
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 280),
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          for (final b in backups)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(b.label, style: const TextStyle(fontFeatures: tabularFigures)),
+              trailing: OutlinedButton(
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+                onPressed: () => _replace(b.file, () => widget.controller.restoreBackup(b)),
+                child: const Text('Geri yükle'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _export() async {
+    final c = widget.controller;
+    final path = await c.pickExportPath();
+    if (path == null || !mounted) return;
+    final error = await c.exportConfig(path);
+    if (!mounted) return;
+    if (error == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ayarlar dışa aktarıldı')));
+    } else {
+      await _showMessage('Dışa aktarılamadı', error);
+    }
+  }
+
+  Future<void> _import() async {
+    final c = widget.controller;
+    final path = await c.pickConfigFile();
+    if (path == null || !mounted) return;
+    await _replace(File(path), () => c.importConfigFile(path));
+  }
+
+  /// Önce dosyanın özetini onaylatır; okunamıyorsa hata gösterir ve hiçbir şey değiştirmez.
+  Future<void> _replace(File source, Future<ReplaceResult> Function() apply) async {
+    final c = widget.controller;
+    final AppConfig loaded;
+    try {
+      loaded = c.repository.readConfigFile(source).$1;
+    } catch (e) {
+      await _showMessage('Dosya okunamadı',
+          'Ayarlar değişmedi. Bozuk ya da bu uygulamanın ayar dosyası değil.');
+      return;
+    }
+    if (!mounted) return;
+    final lessons = loaded.templates.fold<int>(0, (n, t) => n + t.lessons.length);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Bu ayarlar yüklensin mi?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Okul adı: ${loaded.schoolName}'),
+            Text('Program şablonu: ${loaded.templates.length}'),
+            Text('Toplam ders: $lessons'),
+            Text('Zil sesi: ${loaded.sounds.length}'),
+            const SizedBox(height: 12),
+            const Text('Mevcut ayarlar önce yedeklenecek.'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yükle')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final r = await apply();
+    if (!mounted) return;
+    if (!r.ok) {
+      await _showMessage('Ayarlar yüklenemedi', r.error ?? 'Bilinmeyen hata; ayarlar değişmedi.');
+      return;
+    }
+    final notes = [
+      if (r.missingSounds.isNotEmpty)
+        'Bulunamayan sesler yerine klasik zil çalar: ${r.missingSounds.join(', ')}.',
+      ...r.warnings,
+    ];
+    if (notes.isNotEmpty) await _showMessage('Ayarlar yüklendi', notes.join('\n'));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: const Text('Ayarlar yüklendi'),
+      action: SnackBarAction(label: 'Geri al', onPressed: c.undoReplace),
+    ));
+  }
+
+  Future<void> _showMessage(String title, String text) => showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: Text(text),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Tamam'))],
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -183,9 +316,38 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 24),
                 SectionCard(
-                  title: 'Ayar dosyası',
-                  subtitle: 'Yedeklemek ya da başka bir bilgisayara taşımak için bu dosyayı kopyalayın.',
-                  child: SelectableText(c.repository.file.path, style: const TextStyle(fontSize: 13)),
+                  title: 'Yedekler ve taşıma',
+                  subtitle: 'Ayarlar kaydedildikçe otomatik yedek alınır. '
+                      'Başka bir okula taşımak için ayarları dışa aktarın.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SelectableText(c.repository.file.path, style: const TextStyle(fontSize: 13)),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                            onPressed: _export,
+                            icon: const Icon(Icons.upload_file),
+                            label: const Text('Dışa aktar…'),
+                          ),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                            onPressed: _import,
+                            icon: const Icon(Icons.download),
+                            label: const Text('İçe aktar…'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Yedekler', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      _backupList(c),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Align(
