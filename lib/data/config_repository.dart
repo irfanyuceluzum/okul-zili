@@ -24,7 +24,7 @@ class ConfigRepository {
     );
   }
 
-  static const maxBackups = 5;
+  static const maxBackups = 10;
 
   final File file;
 
@@ -91,8 +91,7 @@ class ConfigRepository {
   }
 
   Future<void> _write(AppConfig config) async {
-    const encoder = JsonEncoder.withIndent('  ');
-    final text = encoder.convert(config.toJson());
+    final text = exportJson(config);
     _backupCurrent();
     final tmp = File('${file.path}.tmp');
     await tmp.writeAsString(text, flush: true);
@@ -107,8 +106,55 @@ class ConfigRepository {
     }
   }
 
-  AppConfig _parse(String text, [List<String>? warnings]) =>
-      AppConfig.fromJson(jsonDecode(text) as Map<String, dynamic>, warnings: warnings);
+  /// Dosyaya yazılacak girintili JSON; ayar klasöründeki `sesler/` altındaki
+  /// ses yolları göreli (`sesler/x.mp3`) yazılır.
+  String exportJson(AppConfig config) {
+    const encoder = JsonEncoder.withIndent('  ');
+    final sounds = [
+      for (final s in config.sounds)
+        s.isAsset ? s : BellSound(id: s.id, name: s.name, path: _toRelative(s.path), isAsset: false),
+    ];
+    return encoder.convert(config.copyWith(sounds: sounds).toJson());
+  }
+
+  String get _soundsPrefix => '${file.parent.path.replaceAll('\\', '/')}/sesler/';
+
+  String _toRelative(String path) {
+    final norm = path.replaceAll('\\', '/');
+    final prefix = _soundsPrefix;
+    final inside = Platform.isWindows
+        ? norm.toLowerCase().startsWith(prefix.toLowerCase())
+        : norm.startsWith(prefix);
+    if (!inside || norm.length == prefix.length) return path;
+    return 'sesler/${norm.substring(prefix.length)}';
+  }
+
+  String _toAbsolute(String path) {
+    final norm = path.replaceAll('\\', '/');
+    if (!norm.startsWith('sesler/') || norm.length == 'sesler/'.length) return path;
+    final sep = Platform.pathSeparator;
+    return '${file.parent.path}$sep${norm.replaceAll('/', sep)}';
+  }
+
+  AppConfig _parse(String text, [List<String>? warnings]) {
+    final config = AppConfig.fromJson(jsonDecode(text) as Map<String, dynamic>, warnings: warnings);
+    final sounds = [
+      for (final s in config.sounds)
+        s.isAsset ? s : BellSound(id: s.id, name: s.name, path: _toAbsolute(s.path), isAsset: false),
+    ];
+    return config.copyWith(sounds: sounds);
+  }
+
+  /// Verilen ayar dosyasını okur; bozuk/geçersizse fırlatır. Atlanan
+  /// kayıtların uyarılarını da döndürür.
+  (AppConfig, List<String>) readConfigFile(File f) {
+    final warnings = <String>[];
+    final config = _parse(f.readAsStringSync(), warnings);
+    return (config, warnings);
+  }
+
+  /// Mevcut okunabilir ayar dosyasını 10 dk kuralını atlayarak yedekler.
+  void snapshot() => _backupCurrent(force: true);
 
   /// Art arda kayıtlar (ör. ses kaydırıcısı) yedekleri aynı dakikanın
   /// kopyalarıyla doldurmasın; yedekler zamana yayılsın.
@@ -145,20 +191,35 @@ class ConfigRepository {
       ..sort((a, b) => b.path.compareTo(a.path));
   }
 
+  /// Yedek listesi, en yeni başta. Okunamayan yedekler de listelenir.
+  List<BackupInfo> listBackups() => [for (final f in _backupFiles()) BackupInfo(f, _labelOf(f))];
+
+  /// `config-2026-10-15T09-12-30.json` -> "2026-10-15 09:12".
+  static String _labelOf(File f) {
+    final name = f.uri.pathSegments.last;
+    final stamp = name.substring('config-'.length, name.length - '.json'.length);
+    final parts = stamp.split('T');
+    final time = parts.length == 2 ? parts[1].split('-').take(2).join(':') : '';
+    return '${parts.first} $time'.trim();
+  }
+
   /// En yeni okunabilir yedek ve tarihi ("2026-10-15 09:12").
   (AppConfig, String)? _loadNewestBackup() {
     for (final f in _backupFiles()) {
       try {
-        final config = _parse(f.readAsStringSync());
-        final name = f.uri.pathSegments.last; // config-2026-10-15T09-12-30.json
-        final stamp = name.substring('config-'.length, name.length - '.json'.length);
-        final parts = stamp.split('T');
-        final time = parts.length == 2 ? parts[1].split('-').take(2).join(':') : '';
-        return (config, '${parts.first} $time'.trim());
+        return (_parse(f.readAsStringSync()), _labelOf(f));
       } catch (_) {
         continue;
       }
     }
     return null;
   }
+}
+
+/// Bir ayar yedeği: dosya ve okunur tarih etiketi ("2026-10-15 09:12").
+class BackupInfo {
+  const BackupInfo(this.file, this.label);
+
+  final File file;
+  final String label;
 }

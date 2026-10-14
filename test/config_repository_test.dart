@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:okul_zili/data/config_repository.dart';
 import 'package:okul_zili/data/default_config.dart';
+import 'package:okul_zili/data/models/app_config.dart';
 
 void main() {
   late Directory tmp;
@@ -103,8 +104,8 @@ void main() {
   test('en fazla ${ConfigRepository.maxBackups} yedek tutulur', () async {
     repo.backupDir.createSync(recursive: true);
     // Eski tarihli yedekler (aralık sınırına takılmasın diye eski zaman damgası).
-    for (var i = 0; i < 7; i++) {
-      final f = File('${repo.backupDir.path}${Platform.pathSeparator}config-2026-01-0${i + 1}T08-00-00.json')
+    for (var i = 0; i < 12; i++) {
+      final f = File('${repo.backupDir.path}${Platform.pathSeparator}config-2026-01-${(i + 1).toString().padLeft(2, '0')}T08-00-00.json')
         ..writeAsStringSync(jsonEncode(createDefaultConfig().toJson()));
       f.setLastModifiedSync(DateTime(2026, 1, i + 1));
     }
@@ -113,5 +114,72 @@ void main() {
     final names = backups().map((f) => f.uri.pathSegments.last).toList()..sort();
     expect(names, hasLength(ConfigRepository.maxBackups));
     expect(names.first, isNot(contains('2026-01-01')), reason: 'en eskiler silinir');
+  });
+
+  File fakeBackup(String stamp, {String? content}) {
+    repo.backupDir.createSync(recursive: true);
+    return File('${repo.backupDir.path}${Platform.pathSeparator}config-$stamp.json')
+      ..writeAsStringSync(content ?? jsonEncode(createDefaultConfig().toJson()));
+  }
+
+  test('listBackups en yeni başta ve etiketli; okunamayan da listelenir', () {
+    fakeBackup('2026-10-14T08-00-00');
+    fakeBackup('2026-10-15T09-12-30');
+    fakeBackup('2026-10-13T07-05-00', content: 'bozuk{');
+    final list = repo.listBackups();
+    expect(list.map((b) => b.label), ['2026-10-15 09:12', '2026-10-14 08:00', '2026-10-13 07:05']);
+  });
+
+  test('readConfigFile bozuk dosyada fırlatır', () {
+    final f = fakeBackup('2026-10-13T07-05-00', content: 'bozuk{');
+    expect(() => repo.readConfigFile(f), throwsA(anything));
+  });
+
+  test('readConfigFile atlanan kayıtların uyarısını döndürür', () {
+    final json = createDefaultConfig().toJson()..['holidays'] = [{'bozuk': true}];
+    final f = fakeBackup('2026-10-13T07-05-00', content: jsonEncode(json));
+    final (config, warnings) = repo.readConfigFile(f);
+    expect(config.templates, isNotEmpty);
+    expect(warnings, isNotEmpty);
+  });
+
+  test('snapshot 10 dk kuralını atlar', () async {
+    await repo.save(createDefaultConfig());
+    await repo.save(createDefaultConfig().copyWith(schoolName: 'A')); // 1. yedek
+    expect(backups(), hasLength(1));
+    repo.snapshot();
+    expect(backups().length, greaterThanOrEqualTo(1));
+    // Aynı saniyedeki ad çakışması olmasın diye eski damgalı yedek bırakıp yeniden dene.
+    for (final b in backups()) {
+      b.renameSync('${repo.backupDir.path}${Platform.pathSeparator}config-2026-01-01T00-00-00.json');
+    }
+    repo.file.setLastModifiedSync(DateTime.now());
+    repo.backupDir.listSync().whereType<File>().first.setLastModifiedSync(DateTime.now());
+    repo.snapshot(); // yedek yeni olsa da zorla alınır
+    expect(backups(), hasLength(2));
+  });
+
+  test('göreli yol: save dosyada sesler/x.mp3 yazar, load mutlak döner', () async {
+    final sep = Platform.pathSeparator;
+    final abs = '${tmp.path}${sep}sesler${sep}x.mp3';
+    final base = createDefaultConfig();
+    await repo.save(base.copyWith(sounds: [...base.sounds, BellSound(id: 'u1', name: 'X', path: abs)]));
+    final raw = jsonDecode(repo.file.readAsStringSync()) as Map<String, dynamic>;
+    final saved = (raw['sounds'] as List).cast<Map<String, dynamic>>().firstWhere((s) => s['id'] == 'u1');
+    expect(saved['path'], 'sesler/x.mp3');
+    expect(repo.exportJson(base.copyWith(sounds: [BellSound(id: 'u1', name: 'X', path: abs)])), contains('"sesler/x.mp3"'));
+    final loaded = await repo.load();
+    expect(loaded.sounds.firstWhere((s) => s.id == 'u1').path, abs);
+  });
+
+  test('sesler dışındaki mutlak yol aynen korunur', () async {
+    final sep = Platform.pathSeparator;
+    final abs = '${Directory.systemTemp.path}${sep}baska${sep}y.mp3';
+    final base = createDefaultConfig();
+    await repo.save(base.copyWith(sounds: [...base.sounds, BellSound(id: 'u2', name: 'Y', path: abs)]));
+    final raw = jsonDecode(repo.file.readAsStringSync()) as Map<String, dynamic>;
+    expect((raw['sounds'] as List).cast<Map<String, dynamic>>().firstWhere((s) => s['id'] == 'u2')['path'], abs);
+    final loaded = await repo.load();
+    expect(loaded.sounds.firstWhere((s) => s.id == 'u2').path, abs);
   });
 }
