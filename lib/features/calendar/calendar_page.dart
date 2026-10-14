@@ -404,10 +404,33 @@ class _DayPanelState extends State<_DayPanel> {
 
   late final _note = TextEditingController(text: widget.controller.overrideOn(widget.day)?.note ?? '');
 
+  /// Not, alandan çıkınca ve başka güne geçince kendiliğinden kaydedilir.
+  final _noteFocus = FocusNode();
+
   AppController get c => widget.controller;
 
   @override
+  void initState() {
+    super.initState();
+    _noteFocus.addListener(() {
+      if (!_noteFocus.hasFocus) _saveNote(quiet: true);
+    });
+  }
+
+  @override
   void dispose() {
+    // Başka güne tıklandı: yazılmış ama kaydedilmemiş not kaybolmasın.
+    // Kayıt arayüzü yeniler; ağaç kilitliyken yapılamaz, kare bitince yapılır.
+    final o = c.overrideOn(widget.day);
+    final note = _note.text.trim();
+    if (o != null && (o.note ?? '') != note) {
+      final controller = c;
+      Future.microtask(() => controller.setDayOverride(
+            o.date,
+            DateOverride(date: o.date, templateId: o.templateId, note: note.isEmpty ? null : note),
+          ));
+    }
+    _noteFocus.dispose();
     _note.dispose();
     super.dispose();
   }
@@ -431,13 +454,13 @@ class _DayPanelState extends State<_DayPanel> {
     );
   }
 
-  Future<void> _saveNote() async {
+  Future<void> _saveNote({bool quiet = false}) async {
     final o = c.overrideOn(widget.day);
     if (o == null) return;
     final note = _note.text.trim();
     if ((o.note ?? '') == note) return;
     await c.setDayOverride(widget.day, DateOverride(date: o.date, templateId: o.templateId, note: note.isEmpty ? null : note));
-    if (mounted) {
+    if (!quiet && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not kaydedildi')));
     }
   }
@@ -508,10 +531,11 @@ class _DayPanelState extends State<_DayPanel> {
               const SizedBox(height: 12),
               TextField(
                 controller: _note,
+                focusNode: _noteFocus,
                 decoration: InputDecoration(
                   labelText: 'Not (ana ekranda görünür)',
                   hintText: 'Veli toplantısı',
-                  suffixIcon: IconButton(tooltip: 'Notu kaydet', onPressed: _saveNote, icon: const Icon(Icons.check)),
+                  suffixIcon: IconButton(tooltip: 'Notu kaydet', onPressed: () => _saveNote(), icon: const Icon(Icons.check)),
                 ),
                 onSubmitted: (_) => _saveNote(),
               ),

@@ -58,6 +58,8 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
   Size size = const Size(1280, 820),
   BellPlayer? player,
   AudioFilePicker? pickAudioFile,
+  /// Verilirse [now] yerine bu saat kullanılır (testte ileri sarmak için).
+  DateTime Function()? clock,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -75,7 +77,7 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
     config: config ?? createDefaultConfig(),
     repository: ConfigRepository(File('${tmp.path}/config.json')),
     player: player ?? SilentPlayer(),
-    now: () => now,
+    now: clock ?? () => now,
     pickAudioFile: pickAudioFile,
   );
   final navigation = ValueNotifier(page);

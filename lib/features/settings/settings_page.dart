@@ -19,18 +19,45 @@ class _SettingsPageState extends State<SettingsPage> {
   late final _schoolName = TextEditingController(text: widget.controller.config.schoolName);
   late double _volume = widget.controller.config.volumePercent.toDouble();
 
+  /// Okul adı alandan çıkınca da kaydedilir; Kaydet'e basmayı unutan
+  /// kişinin yazdığı kaybolmasın.
+  final _nameFocus = FocusNode();
+  String? _nameError;
+  bool _disposing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameFocus.addListener(() {
+      if (!_nameFocus.hasFocus && !_disposing) _saveSchoolName(quiet: true);
+    });
+  }
+
   @override
   void dispose() {
+    // Sayfadan çıkılıyor: geçerli bir ad yazıldıysa kaydet, uyarı gösterme.
+    _disposing = true;
+    final name = _schoolName.text.trim();
+    final c = widget.controller;
+    if (name.isNotEmpty && name != c.config.schoolName) {
+      // Ağaç kilitliyken arayüz yenilenemez; kayıt kare bitince yapılır.
+      Future.microtask(() => c.updateConfig(c.config.copyWith(schoolName: name)));
+    }
+    _nameFocus.dispose();
     _schoolName.dispose();
     super.dispose();
   }
 
-  Future<void> _saveSchoolName() async {
+  Future<void> _saveSchoolName({bool quiet = false}) async {
     final name = _schoolName.text.trim();
-    if (name.isEmpty) return;
     final c = widget.controller;
+    if (name.isEmpty) {
+      if (mounted && !_disposing) setState(() => _nameError = 'Okul adı boş olamaz');
+      return;
+    }
+    if (name == c.config.schoolName) return;
     await c.updateConfig(c.config.copyWith(schoolName: name));
-    if (mounted) {
+    if (!quiet && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Okul adı kaydedildi')));
     }
   }
@@ -58,14 +85,18 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: TextField(
                           controller: _schoolName,
-                          decoration: const InputDecoration(labelText: 'Okul adı'),
+                          focusNode: _nameFocus,
+                          decoration: InputDecoration(labelText: 'Okul adı', errorText: _nameError),
+                          onChanged: (_) {
+                            if (_nameError != null) setState(() => _nameError = null);
+                          },
                           onSubmitted: (_) => _saveSchoolName(),
                         ),
                       ),
                       const SizedBox(width: 12),
                       OutlinedButton(
                         style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-                        onPressed: _saveSchoolName,
+                        onPressed: () => _saveSchoolName(),
                         child: const Text('Kaydet'),
                       ),
                     ],

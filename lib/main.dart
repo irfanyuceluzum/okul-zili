@@ -95,7 +95,7 @@ Future<void> _start(List<String> args) async {
   ));
 }
 
-class OkulZiliApp extends StatelessWidget {
+class OkulZiliApp extends StatefulWidget {
   const OkulZiliApp({
     super.key,
     required this.controller,
@@ -110,22 +110,31 @@ class OkulZiliApp extends StatelessWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
+  State<OkulZiliApp> createState() => _OkulZiliAppState();
+}
+
+class _OkulZiliAppState extends State<OkulZiliApp> {
+  // Pano geçişi açık pencere (diyalog) olup olmadığını buradan anlar.
+  late final _navigatorKey = widget.navigatorKey ?? GlobalKey<NavigatorState>();
+
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Okul Zili',
       debugShowCheckedModeBanner: false,
-      navigatorKey: navigatorKey,
+      navigatorKey: _navigatorKey,
       theme: buildAppTheme(),
       locale: const Locale('tr', 'TR'),
       supportedLocales: const [Locale('tr', 'TR')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       builder: (context, child) => PanoIdleWatcher(
-        controller: controller,
-        navigation: navigation,
-        windowControls: windowControls,
+        controller: widget.controller,
+        navigation: widget.navigation,
+        windowControls: widget.windowControls,
+        navigatorKey: _navigatorKey,
         child: child!,
       ),
-      home: AppShell(controller: controller, navigation: navigation, windowControls: windowControls),
+      home: AppShell(controller: widget.controller, navigation: widget.navigation, windowControls: widget.windowControls),
     );
   }
 }

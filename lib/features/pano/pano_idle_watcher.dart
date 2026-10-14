@@ -18,6 +18,7 @@ class PanoIdleWatcher extends StatefulWidget {
     required this.navigation,
     required this.windowControls,
     required this.child,
+    this.navigatorKey,
     this.checkInterval = const Duration(seconds: 5),
   });
 
@@ -25,6 +26,9 @@ class PanoIdleWatcher extends StatefulWidget {
   final ValueNotifier<AppPage> navigation;
   final WindowControls windowControls;
   final Widget child;
+
+  /// Açık bir pencere (diyalog) varken panoya geçilmez.
+  final GlobalKey<NavigatorState>? navigatorKey;
   final Duration checkInterval;
 
   @override
@@ -66,9 +70,18 @@ class _PanoIdleWatcherState extends State<PanoIdleWatcher> {
   Future<void> _check() async {
     final minutes = widget.controller.config.panoIdleMinutes;
     if (minutes <= 0 || widget.navigation.value == AppPage.pano) return;
+    // Yazı alanında imleç varken ya da açık bir pencere varken panoya geçme:
+    // kaydedilmemiş yazı ya da yarım kalmış onay kaybolmasın.
+    if (_editingText() || (widget.navigatorKey?.currentState?.canPop() ?? false)) return;
     if (_idleFor() < Duration(minutes: minutes)) return;
     await widget.windowControls.showWindow();
     widget.navigation.value = AppPage.pano;
+  }
+
+  bool _editingText() {
+    final focused = FocusManager.instance.primaryFocus?.context;
+    if (focused == null) return false;
+    return focused.widget is EditableText || focused.findAncestorWidgetOfExactType<EditableText>() != null;
   }
 
   @override
