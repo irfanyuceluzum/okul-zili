@@ -94,6 +94,25 @@ void main() {
       expect(File(sound.path).existsSync(), isFalse);
     });
 
+    test('acil durum sesi silinince sirene döner', () async {
+      final c = makeController(RecordingPlayer());
+      final sound = await c.importSound(_fakeAudio(tmp, 'okul-sireni.wav').path);
+      await c.setSoundForType(BellType.emergency, sound.id);
+      await c.deleteSound(sound);
+      expect(c.config.soundForType[BellType.emergency], 'alarm');
+    });
+
+    test('siren çalınamazsa acil durum kipi açık kalmaz, ziller susmaz', () async {
+      final player = RecordingPlayer()..failFor = 'alarm';
+      final c = makeController(player);
+      await c.startEmergency();
+      expect(c.emergencyActive, isFalse);
+      expect(c.logs.first.outcome, BellOutcome.failed);
+
+      await c.ringNow();
+      expect(player.plays.single.id, 'zil', reason: 'acil durum kipi zilleri bekletmiyor');
+    });
+
     test('yerleşik sesler silinmez', () async {
       final c = makeController(RecordingPlayer());
       await c.deleteSound(c.config.soundById('zil')!);

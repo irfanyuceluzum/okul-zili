@@ -164,6 +164,9 @@ class AppController extends ChangeNotifier {
       final note = await _playWithFallback(sound, loop: true);
       _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.played, detail: note));
     } catch (e) {
+      // Siren çalınamadıysa acil durum kipi açık kalmasın; yoksa günün tüm
+      // zilleri "susturuldu" olurdu.
+      _emergencyActive = false;
       _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.failed, detail: '$e'));
     }
   }
@@ -306,7 +309,12 @@ class AppController extends ChangeNotifier {
     await updateConfig(_config.copyWith(
       sounds: _config.sounds.where((s) => s.id != sound.id).toList(),
       soundForType: {
-        for (final e in _config.soundForType.entries) e.key: e.value == sound.id ? fallbackBell.id : e.value,
+        for (final e in _config.soundForType.entries)
+          e.key: e.value != sound.id
+              ? e.value
+              : e.key == BellType.emergency
+                  ? _fallbackAlarm.id
+                  : fallbackBell.id,
       },
       specialEvents: [
         for (final ev in _config.specialEvents) ev.soundId == sound.id ? ev.copyWith(soundId: () => null) : ev,
