@@ -1,6 +1,8 @@
 import '../default_config.dart';
 import 'bell_event.dart';
+import '../../core/date_utils.dart';
 import 'calendar.dart';
+import 'notices.dart';
 import 'schedule_template.dart';
 
 class BellSound {
@@ -45,6 +47,8 @@ class AppConfig {
     this.holidays = const [],
     this.overrides = const [],
     this.specialEvents = const [],
+    this.announcements = const [],
+    this.dutyRoster = const [],
     this.volumePercent = 100,
     this.lateToleranceSeconds = 60,
     this.panoIdleMinutes = 3,
@@ -108,6 +112,8 @@ class AppConfig {
       holidays: list(json['holidays'], Holiday.fromJson, 'tatil'),
       overrides: list(json['overrides'], DateOverride.fromJson, 'özel gün'),
       specialEvents: list(json['specialEvents'], SpecialEvent.fromJson, 'etkinlik'),
+      announcements: list(json['announcements'], Announcement.fromJson, 'duyuru'),
+      dutyRoster: list(json['dutyRoster'], DutyEntry.fromJson, 'nöbet'),
       volumePercent: _int(json['volumePercent']) ?? 100,
       lateToleranceSeconds: _int(json['lateToleranceSeconds']) ?? 60,
       panoIdleMinutes: _int(json['panoIdleMinutes']) ?? 3,
@@ -134,6 +140,12 @@ class AppConfig {
   final List<DateOverride> overrides;
   final List<SpecialEvent> specialEvents;
 
+  /// Panoda gösterilen duyurular.
+  final List<Announcement> announcements;
+
+  /// Haftalık nöbetçi öğretmen listesi.
+  final List<DutyEntry> dutyRoster;
+
   /// Zil çalarken kullanılacak ses seviyesi (0-100).
   final int volumePercent;
 
@@ -153,6 +165,8 @@ class AppConfig {
     List<Holiday>? holidays,
     List<DateOverride>? overrides,
     List<SpecialEvent>? specialEvents,
+    List<Announcement>? announcements,
+    List<DutyEntry>? dutyRoster,
     int? volumePercent,
     int? lateToleranceSeconds,
     int? panoIdleMinutes,
@@ -166,10 +180,23 @@ class AppConfig {
         holidays: holidays ?? this.holidays,
         overrides: overrides ?? this.overrides,
         specialEvents: specialEvents ?? this.specialEvents,
+        announcements: announcements ?? this.announcements,
+        dutyRoster: dutyRoster ?? this.dutyRoster,
         volumePercent: volumePercent ?? this.volumePercent,
         lateToleranceSeconds: lateToleranceSeconds ?? this.lateToleranceSeconds,
         panoIdleMinutes: panoIdleMinutes ?? this.panoIdleMinutes,
       );
+
+  /// [now] gününde panoda gösterilecek duyurular: açık, süresi dolmamış, metni dolu.
+  List<Announcement> activeAnnouncements(DateTime now) {
+    final today = dateOnly(now);
+    return announcements
+        .where((a) => a.enabled && a.text.trim().isNotEmpty && (a.endDate == null || !a.endDate!.isBefore(today)))
+        .toList();
+  }
+
+  /// Haftanın [weekday]. günündeki nöbetler (girildiği sırada).
+  List<DutyEntry> dutiesOn(int weekday) => dutyRoster.where((d) => d.weekday == weekday).toList();
 
   ScheduleTemplate? templateById(String id) =>
       templates.where((t) => t.id == id).firstOrNull;
@@ -200,6 +227,8 @@ class AppConfig {
         'holidays': holidays.map((h) => h.toJson()).toList(),
         'overrides': overrides.map((o) => o.toJson()).toList(),
         'specialEvents': specialEvents.map((s) => s.toJson()).toList(),
+        'announcements': announcements.map((a) => a.toJson()).toList(),
+        'dutyRoster': dutyRoster.map((d) => d.toJson()).toList(),
         'volumePercent': volumePercent,
         'lateToleranceSeconds': lateToleranceSeconds,
         'panoIdleMinutes': panoIdleMinutes,
