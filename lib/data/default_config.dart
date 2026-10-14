@@ -59,7 +59,7 @@ AppConfig createDefaultConfig() => AppConfig(
         Holiday(name: 'Atatürk\'ü Anma, Gençlik ve Spor Bayramı', start: DateTime(2027, 5, 19), end: DateTime(2027, 5, 19)),
       ],
       specialEvents: [
-        // Siren sesi eklenince etkinleştirilecek.
+        // Okulun kendi siren düzeni olabileceği için kapalı gelir.
         SpecialEvent(
           id: '10-kasim',
           name: '10 Kasım saygı duruşu',
@@ -67,6 +67,8 @@ AppConfig createDefaultConfig() => AppConfig(
           recurrence: Recurrence.yearly,
           month: 11,
           day: 10,
+          soundId: 'alarm',
+          loopSeconds: 60,
           enabled: false,
         ),
       ],

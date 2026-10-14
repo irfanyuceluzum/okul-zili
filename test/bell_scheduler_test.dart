@@ -14,6 +14,7 @@ class _Harness {
       ring: (bell) async {
         if (failRing) throw Exception('ses aygıtı yok');
         rung.add(bell);
+        return null;
       },
       onLog: logs.add,
       now: () => now,
@@ -165,7 +166,10 @@ void main() {
     var now = _wed(8, 0);
     final scheduler = BellScheduler(
       resolveDay: ScheduleResolver(createDefaultConfig()).resolve,
-      ring: (b) async => rung.add(b),
+      ring: (b) async {
+        rung.add(b);
+        return null;
+      },
       onLog: logs.add,
       holdReason: () => reason,
       now: () => now,

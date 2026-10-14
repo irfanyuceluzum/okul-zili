@@ -73,6 +73,7 @@ class SpecialEvent {
     this.weekdays = const {},
     this.month,
     this.day,
+    this.loopSeconds,
   }) : date = date == null ? null : dateOnly(date);
 
   factory SpecialEvent.fromJson(Map<String, dynamic> json) => SpecialEvent(
@@ -90,6 +91,7 @@ class SpecialEvent {
         },
         month: json['month'] as int?,
         day: json['day'] as int?,
+        loopSeconds: json['loopSeconds'] as int?,
       );
 
   final String id;
@@ -109,6 +111,23 @@ class SpecialEvent {
   final int? month;
   final int? day;
 
+  /// Doluysa ses bu kadar saniye tekrarlanır (ör. 10 Kasım sireni).
+  final int? loopSeconds;
+
+  SpecialEvent copyWith({bool? enabled, String? Function()? soundId}) => SpecialEvent(
+        id: id,
+        name: name,
+        time: time,
+        recurrence: recurrence,
+        soundId: soundId == null ? this.soundId : soundId(),
+        enabled: enabled ?? this.enabled,
+        date: date,
+        weekdays: weekdays,
+        month: month,
+        day: day,
+        loopSeconds: loopSeconds,
+      );
+
   bool occursOn(DateTime d) => switch (recurrence) {
         Recurrence.once => date != null && isSameDay(date!, d),
         Recurrence.weekly => weekdays.contains(d.weekday),
@@ -121,6 +140,7 @@ class SpecialEvent {
         type: BellType.special,
         label: name,
         soundId: soundId,
+        loopSeconds: loopSeconds,
       );
 
   Map<String, dynamic> toJson() => {
@@ -134,5 +154,6 @@ class SpecialEvent {
         'weekdays': weekdays.toList()..sort(),
         'month': month,
         'day': day,
+        'loopSeconds': loopSeconds,
       };
 }

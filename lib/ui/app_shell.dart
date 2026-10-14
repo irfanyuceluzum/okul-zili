@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../app_controller.dart';
 import '../features/calendar/calendar_page.dart';
 import '../features/dashboard/dashboard_page.dart';
+import '../features/events/events_page.dart';
 import '../features/logs/logs_page.dart';
 import '../features/pano/pano_page.dart';
 import '../features/schedule/schedule_page.dart';
 import '../features/settings/settings_page.dart';
+import '../features/sounds/sounds_page.dart';
 import 'navigation.dart';
 import 'theme.dart';
 
@@ -55,6 +57,8 @@ class AppShell extends StatelessWidget {
         AppPage.home => DashboardPage(controller: controller, onNavigate: (p) => navigation.value = p),
         AppPage.program => SchedulePage(controller: controller),
         AppPage.calendar => CalendarPage(controller: controller),
+        AppPage.events => EventsPage(controller: controller),
+        AppPage.sounds => SoundsPage(controller: controller),
         AppPage.logs => LogsPage(controller: controller),
         AppPage.settings => SettingsPage(controller: controller, windowControls: windowControls),
         AppPage.pano => const SizedBox.shrink(),
@@ -68,7 +72,15 @@ class _Sidebar extends StatelessWidget {
   final AppPage current;
   final ValueChanged<AppPage> onSelect;
 
-  static const _mainPages = [AppPage.home, AppPage.program, AppPage.calendar, AppPage.logs, AppPage.settings];
+  static const _mainPages = [
+    AppPage.home,
+    AppPage.program,
+    AppPage.calendar,
+    AppPage.events,
+    AppPage.sounds,
+    AppPage.logs,
+    AppPage.settings,
+  ];
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(listenable: controller, builder: (context, _) => _build(context));

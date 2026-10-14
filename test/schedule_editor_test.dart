@@ -96,7 +96,7 @@ void main() {
     final logs = <BellLogEntry>[];
     final scheduler = BellScheduler(
       resolveDay: (d) => ScheduleResolver(config).resolve(d),
-      ring: (_) async {},
+      ring: (_) async => null,
       onLog: logs.add,
       now: () => now,
     );

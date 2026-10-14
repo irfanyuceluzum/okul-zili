@@ -13,6 +13,7 @@ import 'data/models/app_config.dart';
 import 'data/models/bell_event.dart';
 import 'data/models/calendar.dart';
 import 'data/schedule_draft.dart';
+import 'platform/audio_file_picker.dart';
 import 'platform/bell_player.dart';
 import 'platform/system_services.dart';
 
@@ -25,7 +26,9 @@ class AppController extends ChangeNotifier {
     required this.player,
     SystemServices? system,
     DateTime Function()? now,
+    AudioFilePicker? pickAudioFile,
   })  : _config = config,
+        pickAudioFile = pickAudioFile ?? pickAudioFileWithDialog,
         system = system ?? const NoopSystemServices(),
         _now = now ?? DateTime.now {
     _scheduler = BellScheduler(
@@ -40,6 +43,13 @@ class AppController extends ChangeNotifier {
 
   static const _fallbackAlarm =
       BellSound(id: 'alarm', name: 'Siren', path: 'sounds/alarm.wav', isAsset: true);
+
+  /// Yüklenen ses çalınamazsa yerine çalan yerleşik zil.
+  static const fallbackBell =
+      BellSound(id: 'zil', name: 'Klasik zil', path: 'sounds/zil.wav', isAsset: true);
+
+  /// Ses dosyası seçme penceresi (testlerde sahtesiyle değiştirilir).
+  final AudioFilePicker pickAudioFile;
 
   final ConfigRepository repository;
   final BellPlayer player;
@@ -146,9 +156,13 @@ class AppController extends ChangeNotifier {
     );
     try {
       _ensureAudible(100);
-      final sound = _config.soundById('alarm') ?? _fallbackAlarm;
-      await player.play(sound, volumePercent: 100, loop: true);
-      _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.played));
+      // Eski ayar dosyalarında acil durum türüne ses atanmamış olabilir;
+      // o zaman ilk ses (klasik zil) değil siren çalsın.
+      final sound = (_config.soundForType.containsKey(BellType.emergency) ? _config.soundFor(bell) : null) ??
+          _config.soundById('alarm') ??
+          _fallbackAlarm;
+      final note = await _playWithFallback(sound, loop: true);
+      _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.played, detail: note));
     } catch (e) {
       _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.failed, detail: '$e'));
     }
@@ -233,6 +247,91 @@ class AppController extends ChangeNotifier {
   Future<void> deleteHoliday(Holiday holiday) => updateConfig(
       _config.copyWith(holidays: _config.holidays.where((h) => !identical(h, holiday)).toList()));
 
+  // ---- Zil sesleri ---------------------------------------------------------
+
+  /// Sesi dinletir (zil çalarkenki seviyede). Yedek ses çalındıysa nedenini
+  /// döndürür.
+  Future<String?> previewSound(BellSound sound, {int? stopAfter}) async {
+    if (_emergencyActive) return 'Acil durum alarmı çalarken ses dinletilemez';
+    _ensureAudible(_config.volumePercent);
+    return _playWithFallback(sound, loop: stopAfter != null, stopAfter: stopAfter);
+  }
+
+  /// Ses dosyasını uygulamanın klasörüne kopyalayıp listeye ekler; böylece
+  /// USB bellek çıkarılsa ya da asıl dosya silinse de zil çalar.
+  Future<BellSound> importSound(String sourcePath) async {
+    final sep = Platform.pathSeparator;
+    final dir = Directory('${repository.file.parent.path}${sep}sesler')..createSync(recursive: true);
+    final fileName = sourcePath.split(RegExp(r'[/\\]')).last;
+    final dot = fileName.lastIndexOf('.');
+    final ext = dot > 0 ? fileName.substring(dot).toLowerCase() : '';
+    final id = 's${DateTime.now().microsecondsSinceEpoch}';
+    final dest = '${dir.path}$sep$id$ext';
+    File(sourcePath).copySync(dest);
+    final sound = BellSound(id: id, name: dot > 0 ? fileName.substring(0, dot) : fileName, path: dest);
+    await updateConfig(_config.copyWith(sounds: [..._config.sounds, sound]));
+    return sound;
+  }
+
+  /// Sesin kullanıldığı yerler (zil türleri ve etkinlikler).
+  List<String> soundUsages(String soundId) => [
+        for (final e in _config.soundForType.entries)
+          if (e.value == soundId) e.key.label,
+        for (final ev in _config.specialEvents)
+          if (ev.soundId == soundId) ev.name,
+      ];
+
+  Future<void> renameSound(BellSound sound, String name) => updateConfig(_config.copyWith(sounds: [
+        for (final s in _config.sounds)
+          s.id == sound.id ? BellSound(id: s.id, name: name, path: s.path, isAsset: s.isAsset) : s,
+      ]));
+
+  /// Yüklenen sesi siler; kullanıldığı zil türleri klasik zile, etkinlikler
+  /// varsayılan etkinlik sesine döner. Yerleşik sesler silinmez.
+  Future<void> deleteSound(BellSound sound) async {
+    if (sound.isAsset) return;
+    await updateConfig(_config.copyWith(
+      sounds: _config.sounds.where((s) => s.id != sound.id).toList(),
+      soundForType: {
+        for (final e in _config.soundForType.entries) e.key: e.value == sound.id ? fallbackBell.id : e.value,
+      },
+      specialEvents: [
+        for (final ev in _config.specialEvents) ev.soundId == sound.id ? ev.copyWith(soundId: () => null) : ev,
+      ],
+    ));
+    try {
+      File(sound.path).deleteSync();
+    } catch (_) {}
+  }
+
+  Future<void> setSoundForType(BellType type, String soundId) =>
+      updateConfig(_config.copyWith(soundForType: {..._config.soundForType, type: soundId}));
+
+  // ---- Özel etkinlikler ----------------------------------------------------
+
+  /// Etkinliği ekler ya da aynı kimlikliyi günceller.
+  Future<void> saveEvent(SpecialEvent event) {
+    final exists = _config.specialEvents.any((e) => e.id == event.id);
+    return updateConfig(_config.copyWith(specialEvents: [
+      if (exists)
+        for (final e in _config.specialEvents) e.id == event.id ? event : e
+      else ...[..._config.specialEvents, event],
+    ]));
+  }
+
+  Future<void> deleteEvent(String id) =>
+      updateConfig(_config.copyWith(specialEvents: _config.specialEvents.where((e) => e.id != id).toList()));
+
+  Future<void> setEventEnabled(String id, bool enabled) => updateConfig(_config.copyWith(specialEvents: [
+        for (final e in _config.specialEvents) e.id == id ? e.copyWith(enabled: enabled) : e,
+      ]));
+
+  /// Etkinliğin sesini şimdi çalar (deneme).
+  Future<String?> testEvent(SpecialEvent event) {
+    final bell = event.toBellEvent();
+    return previewSound(_config.soundFor(bell) ?? fallbackBell, stopAfter: event.loopSeconds);
+  }
+
   /// [date] gününün özel programını ayarlar; [override] null ise kaldırır ve
   /// gün haftalık plana (ya da tatile) göre işler.
   Future<void> setDayOverride(DateTime date, DateOverride? override) {
@@ -258,16 +357,45 @@ class AppController extends ChangeNotifier {
 
   // ---- İç işleyiş ---------------------------------------------------------
 
-  Future<void> _ring(BellEvent bell) async {
-    final sound = _config.soundFor(bell);
-    if (sound == null) throw StateError('Tanımlı zil sesi yok');
+  Future<String?> _ring(BellEvent bell) async {
     _ensureAudible(_config.volumePercent);
+    return _playWithFallback(
+      _config.soundFor(bell) ?? fallbackBell,
+      loop: bell.loopSeconds != null,
+      stopAfter: bell.loopSeconds,
+    );
+  }
+
+  /// Her çalmada artar; süreli tekrarın durdurucusu yalnızca kendi çalmasını
+  /// durdursun, arada başlayan başka bir zili kesmesin.
+  int _playId = 0;
+
+  /// Sesi çalar. Yüklenen dosya yoksa ya da çalınamazsa zil sessiz kalmasın
+  /// diye yerleşik zil çalınır; bu durumda açıklama döner.
+  Future<String?> _playWithFallback(BellSound sound, {bool loop = false, int? stopAfter}) async {
+    final id = ++_playId;
     // Sistem sesi denetlenebiliyorsa seviye oradan ayarlanır; çalar tam
     // seviyede çalar. Denetlenemiyorsa seviye çalarda uygulanır.
-    await player.play(
-      sound,
-      volumePercent: system.controlsVolume ? 100 : _config.volumePercent,
-    );
+    final volume = system.controlsVolume ? 100 : _config.volumePercent;
+    String? note;
+    var toPlay = sound;
+    if (!sound.isAsset && !File(sound.path).existsSync()) {
+      note = '"${sound.name}" dosyası bulunamadı, klasik zil çalındı';
+      toPlay = fallbackBell;
+    }
+    try {
+      await player.play(toPlay, volumePercent: volume, loop: loop);
+    } catch (e) {
+      if (toPlay.isAsset) rethrow;
+      note = '"${sound.name}" çalınamadı, klasik zil çalındı';
+      await player.play(fallbackBell, volumePercent: volume, loop: loop);
+    }
+    if (stopAfter != null) {
+      Timer(Duration(seconds: stopAfter), () {
+        if (_playId == id) player.stop();
+      });
+    }
+    return note;
   }
 
   /// Zil çalmadan önce sistem sesini açar. Başarısız olursa zil yine çalınır;

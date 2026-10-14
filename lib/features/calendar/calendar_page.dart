@@ -156,8 +156,6 @@ class _CalendarPageState extends State<CalendarPage> {
                   ],
                 );
               }),
-              const SizedBox(height: 24),
-              _EventList(controller: c),
             ],
           ),
         );
@@ -593,47 +591,6 @@ class _HolidayList extends StatelessWidget {
               onEdit: () => onEdit(h),
               onDelete: () => onDelete(h),
               onShow: () => onShow(h),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EventList extends StatelessWidget {
-  const _EventList({required this.controller});
-
-  final AppController controller;
-
-  static String _recurrence(SpecialEvent e) => switch (e.recurrence) {
-        Recurrence.once => e.date == null ? 'Tek sefer' : _date(e.date!),
-        Recurrence.yearly => 'Her yıl ${e.day} ${turkishMonths[(e.month ?? 1) - 1]}',
-        Recurrence.weekly => 'Her ${(e.weekdays.toList()..sort()).map((d) => turkishWeekdays[d - 1]).join(', ')}',
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final events = controller.config.specialEvents;
-    return SectionCard(
-      title: 'Etkinlikler',
-      subtitle: 'İstiklal Marşı, anma törenleri, anonslar. Düzenleme ekranı ayrıca eklenecek.',
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-      child: Column(
-        children: [
-          if (events.isEmpty) const _Empty('Etkinlik yok'),
-          for (final e in events)
-            Container(
-              constraints: const BoxConstraints(minHeight: 52),
-              decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lineSoft))),
-              child: Row(
-                children: [
-                  SizedBox(width: 190, child: Text(_recurrence(e), style: const TextStyle(fontWeight: FontWeight.w700))),
-                  Expanded(child: Text('${e.name} · ${e.time}')),
-                  e.enabled
-                      ? const Pill('Açık', background: AppColors.okTint, foreground: AppColors.okText)
-                      : const Pill('Kapalı', background: AppColors.neutralTint, foreground: AppColors.inkSecondary),
-                ],
-              ),
             ),
         ],
       ),

@@ -23,6 +23,7 @@ class BellEvent {
     required this.type,
     required this.label,
     this.soundId,
+    this.loopSeconds,
   });
 
   /// Gün içinde benzersiz kimlik (ör. "L1-start"). Aynı zilin iki kez
@@ -34,6 +35,10 @@ class BellEvent {
 
   /// Null ise zil türüne atanmış varsayılan ses çalar.
   final String? soundId;
+
+  /// Doluysa ses bu kadar saniye boyunca tekrarlanır (ör. siren); boşsa bir
+  /// kez çalar.
+  final int? loopSeconds;
 
   @override
   String toString() => '$time $label';

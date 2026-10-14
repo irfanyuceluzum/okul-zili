@@ -28,8 +28,9 @@ class BellScheduler {
   /// bir sonraki kontrolde kendiliğinden kullanılır.
   final DaySchedule Function(DateTime date) resolveDay;
 
-  /// Zili çalar; hata fırlatırsa zil "Hata" olarak kaydedilir.
-  final Future<void> Function(BellEvent bell) ring;
+  /// Zili çalar; hata fırlatırsa zil "Hata" olarak kaydedilir. Dönen metin
+  /// (ör. "yedek ses çalındı") kayda açıklama olarak eklenir.
+  final Future<String?> Function(BellEvent bell) ring;
   final void Function(BellLogEntry entry) onLog;
 
   /// Null olmayan bir neden dönerse programlı ziller çalınmaz, bu nedenle
@@ -147,8 +148,8 @@ class BellScheduler {
 
   Future<void> _play(BellEvent bell, {String? key}) async {
     try {
-      await ring(bell);
-      _log(bell, BellOutcome.played, key: key);
+      final detail = await ring(bell);
+      _log(bell, BellOutcome.played, key: key, detail: detail);
     } catch (e) {
       _log(bell, BellOutcome.failed, key: key, detail: '$e');
     }

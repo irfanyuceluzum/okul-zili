@@ -8,6 +8,7 @@ import 'package:okul_zili/data/config_repository.dart';
 import 'package:okul_zili/data/default_config.dart';
 import 'package:okul_zili/data/models/app_config.dart';
 import 'package:okul_zili/main.dart';
+import 'package:okul_zili/platform/audio_file_picker.dart';
 import 'package:okul_zili/platform/bell_player.dart';
 import 'package:okul_zili/ui/navigation.dart';
 
@@ -17,6 +18,24 @@ class SilentPlayer implements BellPlayer {
 
   @override
   Future<void> stop() async {}
+}
+
+/// Hangi sesin, döngüde mi çalındığını ve kaç kez durdurulduğunu kaydeder.
+class RecordingPlayer implements BellPlayer {
+  final plays = <({String id, bool loop})>[];
+  int stops = 0;
+
+  /// Bu kimlikteki ses çalınmak istenince hata fırlatır (bozuk dosya).
+  String? failFor;
+
+  @override
+  Future<void> play(BellSound sound, {required int volumePercent, bool loop = false}) async {
+    if (sound.id == failFor) throw Exception('çözülemeyen ses biçimi');
+    plays.add((id: sound.id, loop: loop));
+  }
+
+  @override
+  Future<void> stop() async => stops++;
 }
 
 /// Ölçüler gerçekçi olsun diye uygulamanın yazı tipini yükler (varsayılan
@@ -37,6 +56,8 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
   AppPage page = AppPage.home,
   AppConfig? config,
   Size size = const Size(1280, 820),
+  BellPlayer? player,
+  AudioFilePicker? pickAudioFile,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -53,8 +74,9 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
   final controller = AppController(
     config: config ?? createDefaultConfig(),
     repository: ConfigRepository(File('${tmp.path}/config.json')),
-    player: SilentPlayer(),
+    player: player ?? SilentPlayer(),
     now: () => now,
+    pickAudioFile: pickAudioFile,
   );
   final navigation = ValueNotifier(page);
   await tester.pumpWidget(OkulZiliApp(
