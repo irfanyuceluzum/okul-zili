@@ -185,6 +185,16 @@ class AppController extends ChangeNotifier {
     await refreshAutostart();
   }
 
+  /// Tatili ekler; [replacing] verilirse onun yerine koyar (düzenleme).
+  Future<void> saveHoliday(Holiday holiday, {Holiday? replacing}) {
+    final list = [..._config.holidays.where((h) => !identical(h, replacing)), holiday]
+      ..sort((a, b) => a.start.compareTo(b.start));
+    return updateConfig(_config.copyWith(holidays: list));
+  }
+
+  Future<void> deleteHoliday(Holiday holiday) => updateConfig(
+      _config.copyWith(holidays: _config.holidays.where((h) => !identical(h, holiday)).toList()));
+
   /// Sonraki (bugün dahil) tatil.
   Holiday? nextHoliday() {
     final today = dateOnly(_now());

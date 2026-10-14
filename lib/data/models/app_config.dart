@@ -46,6 +46,7 @@ class AppConfig {
     this.specialEvents = const [],
     this.volumePercent = 100,
     this.lateToleranceSeconds = 60,
+    this.panoIdleMinutes = 3,
   });
 
   factory AppConfig.fromJson(Map<String, dynamic> json) => AppConfig(
@@ -76,6 +77,7 @@ class AppConfig {
             .toList(),
         volumePercent: json['volumePercent'] as int? ?? 100,
         lateToleranceSeconds: json['lateToleranceSeconds'] as int? ?? 60,
+        panoIdleMinutes: json['panoIdleMinutes'] as int? ?? 3,
       );
 
   static const schemaVersion = 1;
@@ -99,6 +101,9 @@ class AppConfig {
   /// daha geç kalınırsa (ör. bilgisayar uykudaydı) zil "kaçırıldı" sayılır.
   final int lateToleranceSeconds;
 
+  /// Bilgisayar bu kadar dakika boşta kalınca pano modu açılır; 0 ise kapalı.
+  final int panoIdleMinutes;
+
   AppConfig copyWith({
     String? schoolName,
     List<ScheduleTemplate>? templates,
@@ -110,6 +115,7 @@ class AppConfig {
     List<SpecialEvent>? specialEvents,
     int? volumePercent,
     int? lateToleranceSeconds,
+    int? panoIdleMinutes,
   }) =>
       AppConfig(
         schoolName: schoolName ?? this.schoolName,
@@ -122,6 +128,7 @@ class AppConfig {
         specialEvents: specialEvents ?? this.specialEvents,
         volumePercent: volumePercent ?? this.volumePercent,
         lateToleranceSeconds: lateToleranceSeconds ?? this.lateToleranceSeconds,
+        panoIdleMinutes: panoIdleMinutes ?? this.panoIdleMinutes,
       );
 
   ScheduleTemplate? templateById(String id) =>
@@ -155,5 +162,6 @@ class AppConfig {
         'specialEvents': specialEvents.map((s) => s.toJson()).toList(),
         'volumePercent': volumePercent,
         'lateToleranceSeconds': lateToleranceSeconds,
+        'panoIdleMinutes': panoIdleMinutes,
       };
 }

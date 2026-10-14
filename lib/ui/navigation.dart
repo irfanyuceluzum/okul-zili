@@ -19,6 +19,9 @@ enum AppPage {
 abstract interface class WindowControls {
   Future<void> setFullScreen(bool fullScreen);
 
+  /// Sistem tepsisinde gizliyse pencereyi gösterir.
+  Future<void> showWindow();
+
   /// Onay sorup uygulamayı tamamen kapatır.
   Future<void> requestQuit();
 }
@@ -28,6 +31,9 @@ class NoopWindowControls implements WindowControls {
 
   @override
   Future<void> setFullScreen(bool fullScreen) async {}
+
+  @override
+  Future<void> showWindow() async {}
 
   @override
   Future<void> requestQuit() async {}

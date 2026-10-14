@@ -47,6 +47,7 @@ class DesktopShell with TrayListener, WindowListener implements WindowControls {
     await _syncMenu();
   }
 
+  @override
   Future<void> showWindow() async {
     await windowManager.show();
     await windowManager.focus();

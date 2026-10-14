@@ -29,3 +29,9 @@ flutter run -d macos
 - `lib/features/` — ekranlar
 - `tools/baglanti_testi.ps1` — telefonun zil bilgisayarına okul ağında
   ulaşıp ulaşamadığını dener (Android kumanda için)
+
+## Lisans
+
+[GNU GPL v3](LICENSE). Uygulama ücretsizdir; değiştirip dağıtan herkes kaynak
+kodunu da aynı lisansla paylaşmak zorundadır. IBM Plex Sans yazı tipi
+[SIL Open Font License](assets/fonts/OFL.txt) ile dağıtılır.

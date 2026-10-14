@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'windows/windows_audio.dart';
+import 'windows/windows_idle.dart';
 
 /// Sistemin ses seviyesi; okunamıyorsa [error] dolu gelir.
 class VolumeStatus {
@@ -27,6 +28,9 @@ abstract interface class SystemServices {
   bool ensureAudible(int percent);
 
   void preventSleep();
+
+  /// Bilgisayarın (tüm sistemin) boşta kaldığı süre; bilinmiyorsa null.
+  Duration? idleTime();
 
   Future<bool> isAutostartEnabled();
   Future<void> setAutostart(bool enabled);
@@ -66,6 +70,15 @@ class WindowsSystemServices implements SystemServices {
   void preventSleep() => preventSystemSleep();
 
   @override
+  Duration? idleTime() {
+    try {
+      return systemIdleTime();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Future<bool> isAutostartEnabled() async {
     final result = await Process.run('reg', ['query', _runKey, '/v', _valueName]);
     return result.exitCode == 0;
@@ -103,6 +116,9 @@ class NoopSystemServices implements SystemServices {
 
   @override
   void preventSleep() {}
+
+  @override
+  Duration? idleTime() => null;
 
   @override
   Future<bool> isAutostartEnabled() async => false;

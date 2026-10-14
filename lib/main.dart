@@ -6,6 +6,7 @@ import 'package:windows_single_instance/windows_single_instance.dart';
 
 import 'app_controller.dart';
 import 'data/config_repository.dart';
+import 'features/pano/pano_idle_watcher.dart';
 import 'platform/bell_player.dart';
 import 'platform/desktop_shell.dart';
 import 'platform/system_services.dart';
@@ -75,6 +76,12 @@ class OkulZiliApp extends StatelessWidget {
       locale: const Locale('tr', 'TR'),
       supportedLocales: const [Locale('tr', 'TR')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      builder: (context, child) => PanoIdleWatcher(
+        controller: controller,
+        navigation: navigation,
+        windowControls: windowControls,
+        child: child!,
+      ),
       home: AppShell(controller: controller, navigation: navigation, windowControls: windowControls),
     );
   }

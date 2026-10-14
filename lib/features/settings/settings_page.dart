@@ -131,6 +131,27 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 24),
                 SectionCard(
+                  title: 'Pano modu',
+                  subtitle: 'Bilgisayar bu süre boyunca kullanılmazsa koridor ekranı görünümü kendiliğinden açılır. '
+                      'Çıkmak için Esc tuşuna basın.',
+                  child: Row(
+                    children: [
+                      const Text('Kendiliğinden aç:', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 16),
+                      DropdownButton<int>(
+                        value: const [0, 1, 3, 5, 10, 15, 30].contains(c.config.panoIdleMinutes) ? c.config.panoIdleMinutes : 3,
+                        onChanged: (v) => c.updateConfig(c.config.copyWith(panoIdleMinutes: v)),
+                        items: [
+                          const DropdownMenuItem(value: 0, child: Text('Kapalı')),
+                          for (final m in const [1, 3, 5, 10, 15, 30])
+                            DropdownMenuItem(value: m, child: Text('$m dakika boşta kalınca')),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SectionCard(
                   title: 'Ayar dosyası',
                   subtitle: 'Yedeklemek ya da başka bir bilgisayara taşımak için bu dosyayı kopyalayın.',
                   child: SelectableText(c.repository.file.path, style: const TextStyle(fontSize: 13)),
