@@ -12,6 +12,7 @@ import 'data/config_repository.dart';
 import 'data/models/app_config.dart';
 import 'data/models/bell_event.dart';
 import 'data/models/calendar.dart';
+import 'data/models/notices.dart';
 import 'data/schedule_draft.dart';
 import 'platform/audio_file_picker.dart';
 import 'platform/bell_player.dart';
@@ -434,6 +435,24 @@ class AppController extends ChangeNotifier {
   Future<void> setEventEnabled(String id, bool enabled) => updateConfig(_config.copyWith(specialEvents: [
         for (final e in _config.specialEvents) e.id == id ? e.copyWith(enabled: enabled) : e,
       ]));
+
+  // ---- Duyuru ve nöbet ------------------------------------------------------
+
+  /// Duyuruyu ekler ya da aynı kimlikliyi günceller.
+  Future<void> saveAnnouncement(Announcement announcement) {
+    final exists = _config.announcements.any((a) => a.id == announcement.id);
+    return updateConfig(_config.copyWith(announcements: [
+      if (exists)
+        for (final a in _config.announcements) a.id == announcement.id ? announcement : a
+      else ...[..._config.announcements, announcement],
+    ]));
+  }
+
+  Future<void> deleteAnnouncement(String id) =>
+      updateConfig(_config.copyWith(announcements: _config.announcements.where((a) => a.id != id).toList()));
+
+  /// Nöbet çizelgesinin tamamını değiştirir.
+  Future<void> setDutyRoster(List<DutyEntry> roster) => updateConfig(_config.copyWith(dutyRoster: List.of(roster)));
 
   /// Etkinliğin sesini şimdi çalar (deneme).
   Future<String?> testEvent(SpecialEvent event) {

@@ -5,6 +5,7 @@ import '../features/calendar/calendar_page.dart';
 import '../features/dashboard/dashboard_page.dart';
 import '../features/events/events_page.dart';
 import '../features/logs/logs_page.dart';
+import '../features/notices/notices_page.dart';
 import '../features/pano/pano_page.dart';
 import '../features/schedule/schedule_page.dart';
 import '../features/settings/settings_page.dart';
@@ -59,6 +60,7 @@ class AppShell extends StatelessWidget {
         AppPage.calendar => CalendarPage(controller: controller),
         AppPage.events => EventsPage(controller: controller),
         AppPage.sounds => SoundsPage(controller: controller),
+        AppPage.notices => NoticesPage(controller: controller),
         AppPage.logs => LogsPage(controller: controller),
         AppPage.settings => SettingsPage(controller: controller, windowControls: windowControls),
         AppPage.pano => const SizedBox.shrink(),
@@ -78,6 +80,7 @@ class _Sidebar extends StatelessWidget {
     AppPage.calendar,
     AppPage.events,
     AppPage.sounds,
+    AppPage.notices,
     AppPage.logs,
     AppPage.settings,
   ];
