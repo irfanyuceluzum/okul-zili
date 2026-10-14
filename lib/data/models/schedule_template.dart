@@ -12,10 +12,21 @@ class Lesson {
   final ClockTime start;
   final ClockTime end;
 
+  int get minutes => end.inMinutes - start.inMinutes;
+
   Map<String, dynamic> toJson() => {
         'start': start.toString(),
         'end': end.toString(),
       };
+
+  @override
+  bool operator ==(Object other) => other is Lesson && other.start == start && other.end == end;
+
+  @override
+  int get hashCode => Object.hash(start, end);
+
+  @override
+  String toString() => '$start–$end';
 }
 
 /// Bir günün ders düzeni (ör. "Normal Gün", "Kısaltılmış Gün").
@@ -46,6 +57,44 @@ class ScheduleTemplate {
         lunchAfterLesson: json['lunchAfterLesson'] as int?,
       );
 
+  /// Eşit süreli ders ve teneffüslerle ders listesi üretir ("Hızlı doldur").
+  /// [lunchAfter] 0 ya da null ise öğle arası yoktur. Ders gece yarısını
+  /// geçerse [RangeError] fırlatır.
+  static List<Lesson> generateLessons({
+    required ClockTime firstStart,
+    required int count,
+    required int lessonMinutes,
+    required int breakMinutes,
+    int? lunchAfter,
+    int lunchMinutes = 0,
+  }) {
+    final lessons = <Lesson>[];
+    var start = firstStart.inMinutes;
+    for (var n = 1; n <= count; n++) {
+      final end = start + lessonMinutes;
+      lessons.add(Lesson(ClockTime.fromMinutes(start), ClockTime.fromMinutes(end)));
+      start = end + (n == lunchAfter ? lunchMinutes : breakMinutes);
+    }
+    return lessons;
+  }
+
+  ScheduleTemplate copyWith({
+    String? id,
+    String? name,
+    ClockTime? Function()? assemblyTime,
+    List<Lesson>? lessons,
+    int? teacherBellMinutesBefore,
+    int? Function()? lunchAfterLesson,
+  }) =>
+      ScheduleTemplate(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        assemblyTime: assemblyTime == null ? this.assemblyTime : assemblyTime(),
+        lessons: lessons ?? this.lessons,
+        teacherBellMinutesBefore: teacherBellMinutesBefore ?? this.teacherBellMinutesBefore,
+        lunchAfterLesson: lunchAfterLesson == null ? this.lunchAfterLesson : lunchAfterLesson(),
+      );
+
   final String id;
   final String name;
 
@@ -71,6 +120,11 @@ class ScheduleTemplate {
   /// Şablondaki hataları Türkçe olarak döndürür; boş liste geçerli demektir.
   List<String> validate() {
     final errors = <String>[];
+    if (name.trim().isEmpty) errors.add('Şablonun adı boş olamaz.');
+    if (lessons.isEmpty) errors.add('En az bir ders olmalı.');
+    if (lunchAfterLesson != null && (lunchAfterLesson! < 1 || lunchAfterLesson! >= lessons.length)) {
+      errors.add('Öğle arası, son dersten önceki bir dersten sonra olmalı.');
+    }
     for (var i = 0; i < lessons.length; i++) {
       final l = lessons[i];
       if (l.end <= l.start) {

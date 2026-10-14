@@ -71,9 +71,12 @@ class _Sidebar extends StatelessWidget {
   static const _mainPages = [AppPage.home, AppPage.program, AppPage.calendar, AppPage.logs, AppPage.settings];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(listenable: controller, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     // Dar pencerede yalnızca simgeler görünür.
     final compact = MediaQuery.sizeOf(context).width < 1180;
+    final unsavedSchedule = controller.scheduleDraft?.dirty ?? false;
     return Container(
       width: compact ? 80 : 240,
       decoration: const BoxDecoration(
@@ -98,20 +101,17 @@ class _Sidebar extends StatelessWidget {
                 if (!compact) ...[
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ListenableBuilder(
-                      listenable: controller,
-                      builder: (context, _) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Okul Zili', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                          Text(
-                            controller.config.schoolName.isEmpty ? 'Okul adı girilmedi' : controller.config.schoolName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 13, color: AppColors.inkSecondary),
-                          ),
-                        ],
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Okul Zili', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                        Text(
+                          controller.config.schoolName.isEmpty ? 'Okul adı girilmedi' : controller.config.schoolName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13, color: AppColors.inkSecondary),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -120,7 +120,13 @@ class _Sidebar extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           for (final page in _mainPages) ...[
-            _NavItem(page: page, selected: page == current, compact: compact, onTap: () => onSelect(page)),
+            _NavItem(
+              page: page,
+              selected: page == current,
+              compact: compact,
+              badge: page == AppPage.program && unsavedSchedule,
+              onTap: () => onSelect(page),
+            ),
             const SizedBox(height: 4),
           ],
           const Spacer(),
@@ -145,6 +151,7 @@ class _NavItem extends StatelessWidget {
     required this.compact,
     required this.onTap,
     this.outlined = false,
+    this.badge = false,
     this.label,
   });
 
@@ -152,6 +159,9 @@ class _NavItem extends StatelessWidget {
   final bool selected;
   final bool compact;
   final bool outlined;
+
+  /// Kaydedilmemiş değişiklik işareti.
+  final bool badge;
   final String? label;
   final VoidCallback onTap;
 
@@ -159,6 +169,7 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = selected ? AppColors.lessonText : (outlined ? AppColors.ink : AppColors.inkSecondary);
     final text = label ?? page.label;
+    final semanticText = badge ? '$text (kaydedilmedi)' : text;
     final item = Material(
       color: selected ? AppColors.lessonTint : Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -175,7 +186,12 @@ class _NavItem extends StatelessWidget {
             child: Row(
               mainAxisAlignment: compact ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
-                Icon(selected ? page.selectedIcon : page.icon, size: 20, color: fg),
+                Badge(
+                  isLabelVisible: badge,
+                  smallSize: 9,
+                  backgroundColor: AppColors.lunch,
+                  child: Icon(selected ? page.selectedIcon : page.icon, size: 20, color: fg),
+                ),
                 if (!compact) ...[
                   const SizedBox(width: 12),
                   Expanded(
@@ -195,8 +211,8 @@ class _NavItem extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      label: compact ? text : null,
-      child: compact ? Tooltip(message: text, child: item) : item,
+      label: compact || badge ? semanticText : null,
+      child: compact ? Tooltip(message: semanticText, child: item) : item,
     );
   }
 }

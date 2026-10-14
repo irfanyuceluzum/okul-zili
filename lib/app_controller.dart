@@ -12,6 +12,7 @@ import 'data/config_repository.dart';
 import 'data/models/app_config.dart';
 import 'data/models/bell_event.dart';
 import 'data/models/calendar.dart';
+import 'data/schedule_draft.dart';
 import 'platform/bell_player.dart';
 import 'platform/system_services.dart';
 
@@ -155,6 +156,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> updateConfig(AppConfig config) async {
     _config = config;
+    _scheduler.scheduleChanged();
     notifyListeners();
     try {
       await repository.save(config);
@@ -183,6 +185,42 @@ class AppController extends ChangeNotifier {
       _lastError = 'Otomatik başlatma ayarlanamadı: $e';
     }
     await refreshAutostart();
+  }
+
+  // ---- Ders programı taslağı ----------------------------------------------
+
+  ScheduleDraft? _scheduleDraft;
+
+  /// Kaydedilmemiş program değişiklikleri; sayfalar arası geçişte korunur.
+  ScheduleDraft? get scheduleDraft => _scheduleDraft;
+
+  /// Düzenlenecek taslak. Değişiklik yapılmamışsa her seferinde güncel
+  /// ayarlardan yeniden kurulur (seçili şablon korunur).
+  ScheduleDraft editSchedule() {
+    final current = _scheduleDraft;
+    if (current != null && current.dirty) return current;
+    final fresh = ScheduleDraft.fromConfig(_config);
+    if (current != null && fresh.byId(current.selectedId) != null) fresh.selectedId = current.selectedId;
+    return _scheduleDraft = fresh;
+  }
+
+  /// Taslak değişince arayüzün (ve menüdeki işaretin) yenilenmesi için.
+  void scheduleDraftChanged() => notifyListeners();
+
+  void discardScheduleDraft() {
+    _scheduleDraft = null;
+    notifyListeners();
+  }
+
+  /// Taslağı kaydeder; sorun varsa kaydetmeden sorunları döndürür.
+  Future<List<String>> saveScheduleDraft() async {
+    final draft = _scheduleDraft;
+    if (draft == null) return const [];
+    final errors = draft.validate(_config.overrides);
+    if (errors.isNotEmpty) return errors;
+    _scheduleDraft = null;
+    await updateConfig(_config.copyWith(templates: draft.templates, weekPlan: {...draft.weekPlan}));
+    return const [];
   }
 
   /// Tatili ekler; [replacing] verilirse onun yerine koyar (düzenleme).
