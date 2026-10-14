@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Orkestra denetim çıktıları
+.claude/tmp/
