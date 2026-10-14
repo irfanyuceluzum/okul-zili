@@ -52,9 +52,10 @@ class ScheduleTemplate {
         lessons: (json['lessons'] as List)
             .map((e) => Lesson.fromJson(e as Map<String, dynamic>))
             .toList(),
-        teacherBellMinutesBefore:
-            json['teacherBellMinutesBefore'] as int? ?? 0,
-        lunchAfterLesson: json['lunchAfterLesson'] as int?,
+        // Varsayılan kurucuyla aynı (2 dk); eksik alanda öğretmen zili
+        // sessizce kapanmasın.
+        teacherBellMinutesBefore: (json['teacherBellMinutesBefore'] as num?)?.toInt() ?? 2,
+        lunchAfterLesson: (json['lunchAfterLesson'] as num?)?.toInt(),
       );
 
   /// Eşit süreli ders ve teneffüslerle ders listesi üretir ("Hızlı doldur").

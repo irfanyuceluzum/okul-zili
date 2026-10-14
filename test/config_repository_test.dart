@@ -75,6 +75,31 @@ void main() {
     expect(backups(), isEmpty, reason: 'tek önceki dosya bozuktu');
   });
 
+  test('tek bozuk kayıt atlanır, geri kalan ayarlar korunur', () async {
+    final json = createDefaultConfig().copyWith(schoolName: 'Atatürk Ortaokulu').toJson();
+    (json['holidays'] as List).add({'name': 'Bozuk tatil', 'start': '2026-13-45', 'end': 'x'});
+    (json['soundForType'] as Map<String, dynamic>)['gelecekSurumTuru'] = 'zil';
+    json['volumePercent'] = 80.0; // elle düzenlemede ondalıklı yazılmış
+    repo.file.writeAsStringSync(jsonEncode(json));
+
+    final loaded = await repo.load();
+    expect(loaded.schoolName, 'Atatürk Ortaokulu');
+    expect(loaded.holidays, hasLength(createDefaultConfig().holidays.length));
+    expect(loaded.volumePercent, 80);
+    expect(repo.lastLoadWarning, contains('1 tatil'));
+    expect(backups(), hasLength(1), reason: 'atlanan kayıt yedekte durur');
+    expect(backups().single.readAsStringSync(), contains('Bozuk tatil'));
+  });
+
+  test('hiç şablon okunamazsa yedeğe döner', () async {
+    await repo.save(createDefaultConfig().copyWith(schoolName: 'Yedekteki'));
+    await repo.save(createDefaultConfig());
+    final json = createDefaultConfig().toJson()..['templates'] = [{'bozuk': true}];
+    repo.file.writeAsStringSync(jsonEncode(json));
+    final loaded = await repo.load();
+    expect(loaded.schoolName, 'Yedekteki');
+  });
+
   test('en fazla ${ConfigRepository.maxBackups} yedek tutulur', () async {
     repo.backupDir.createSync(recursive: true);
     // Eski tarihli yedekler (aralık sınırına takılmasın diye eski zaman damgası).

@@ -53,7 +53,13 @@ class ConfigRepository {
     }
 
     try {
-      return _parse(file.readAsStringSync());
+      final warnings = <String>[];
+      final config = _parse(file.readAsStringSync(), warnings);
+      if (warnings.isNotEmpty) {
+        lastLoadWarning = '${warnings.join(' ')} Ayar dosyasının önceki hâli "yedekler" klasöründe.';
+        _backupCurrent(force: true);
+      }
+      return config;
     } catch (e) {
       // Bozuk dosyayı silmeden kenara al (kilitliyse olduğu yerde kalır).
       String moved = '';
@@ -101,18 +107,19 @@ class ConfigRepository {
     }
   }
 
-  AppConfig _parse(String text) => AppConfig.fromJson(jsonDecode(text) as Map<String, dynamic>);
+  AppConfig _parse(String text, [List<String>? warnings]) =>
+      AppConfig.fromJson(jsonDecode(text) as Map<String, dynamic>, warnings: warnings);
 
   /// Art arda kayıtlar (ör. ses kaydırıcısı) yedekleri aynı dakikanın
   /// kopyalarıyla doldurmasın; yedekler zamana yayılsın.
   static const backupInterval = Duration(minutes: 10);
 
   /// Mevcut ve okunabilir ayar dosyasını yedekler, eski yedekleri budar.
-  void _backupCurrent() {
+  void _backupCurrent({bool force = false}) {
     try {
       if (!file.existsSync()) return;
       final newest = _backupFiles().firstOrNull;
-      if (newest != null && DateTime.now().difference(newest.lastModifiedSync()) < backupInterval) return;
+      if (!force && newest != null && DateTime.now().difference(newest.lastModifiedSync()) < backupInterval) return;
       final text = file.readAsStringSync();
       _parse(text); // Bozuk dosya yedeklenmez; sağlam yedekleri ezmesin.
       backupDir.createSync(recursive: true);

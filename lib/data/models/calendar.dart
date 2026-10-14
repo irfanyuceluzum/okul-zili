@@ -87,11 +87,11 @@ class SpecialEvent {
             ? null
             : parseDateKey(json['date'] as String),
         weekdays: {
-          for (final w in (json['weekdays'] as List? ?? const [])) w as int,
+          for (final w in (json['weekdays'] as List? ?? const [])) (w as num).toInt(),
         },
-        month: json['month'] as int?,
-        day: json['day'] as int?,
-        loopSeconds: json['loopSeconds'] as int?,
+        month: (json['month'] as num?)?.toInt(),
+        day: (json['day'] as num?)?.toInt(),
+        loopSeconds: (json['loopSeconds'] as num?)?.toInt(),
       );
 
   final String id;

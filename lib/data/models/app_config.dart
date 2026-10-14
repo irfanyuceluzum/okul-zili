@@ -1,3 +1,4 @@
+import '../default_config.dart';
 import 'bell_event.dart';
 import 'calendar.dart';
 import 'schedule_template.dart';
@@ -49,36 +50,75 @@ class AppConfig {
     this.panoIdleMinutes = 3,
   });
 
-  factory AppConfig.fromJson(Map<String, dynamic> json) => AppConfig(
-        schoolName: json['schoolName'] as String? ?? '',
-        templates: (json['templates'] as List)
-            .map((e) => ScheduleTemplate.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        weekPlan: {
-          for (final e in (json['weekPlan'] as Map<String, dynamic>).entries)
-            int.parse(e.key): e.value as String?,
-        },
-        sounds: (json['sounds'] as List)
-            .map((e) => BellSound.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        soundForType: {
-          for (final e
-              in (json['soundForType'] as Map<String, dynamic>).entries)
-            BellType.values.byName(e.key): e.value as String,
-        },
-        holidays: (json['holidays'] as List? ?? const [])
-            .map((e) => Holiday.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        overrides: (json['overrides'] as List? ?? const [])
-            .map((e) => DateOverride.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        specialEvents: (json['specialEvents'] as List? ?? const [])
-            .map((e) => SpecialEvent.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        volumePercent: json['volumePercent'] as int? ?? 100,
-        lateToleranceSeconds: json['lateToleranceSeconds'] as int? ?? 60,
-        panoIdleMinutes: json['panoIdleMinutes'] as int? ?? 3,
-      );
+  /// Ayar dosyasını okur. Tek tek okunamayan kayıtlar (bir tatil, bir
+  /// etkinlik...) atlanır ve [warnings] listesine yazılır; bir kayıttaki
+  /// hata tüm ayarları geçersiz kılmasın. Hiç şablon okunamazsa
+  /// [FormatException] fırlatır (yükleyici o zaman yedeğe döner).
+  factory AppConfig.fromJson(Map<String, dynamic> json, {List<String>? warnings}) {
+    final skipped = <String, int>{};
+    List<T> list<T>(Object? raw, T Function(Map<String, dynamic>) parse, String what) {
+      if (raw is! List) return [];
+      final out = <T>[];
+      for (final e in raw) {
+        try {
+          out.add(parse(e as Map<String, dynamic>));
+        } catch (_) {
+          skipped[what] = (skipped[what] ?? 0) + 1;
+        }
+      }
+      return out;
+    }
+
+    final templates = list(json['templates'], ScheduleTemplate.fromJson, 'şablon');
+    if (templates.isEmpty) throw const FormatException('Ayar dosyasında okunabilir şablon yok');
+
+    final weekPlan = <int, String?>{};
+    final rawPlan = json['weekPlan'];
+    if (rawPlan is Map) {
+      for (final e in rawPlan.entries) {
+        final day = int.tryParse('${e.key}');
+        if (day != null && day >= 1 && day <= 7 && (e.value == null || e.value is String)) {
+          weekPlan[day] = e.value as String?;
+        }
+      }
+    }
+
+    final defaults = createDefaultConfig();
+    var sounds = list(json['sounds'], BellSound.fromJson, 'ses');
+    if (sounds.isEmpty) sounds = defaults.sounds;
+
+    final soundForType = <BellType, String>{};
+    final rawTypes = json['soundForType'];
+    if (rawTypes is Map) {
+      for (final e in rawTypes.entries) {
+        final type = BellType.values.where((t) => t.name == e.key).firstOrNull;
+        if (type != null && e.value is String) soundForType[type] = e.value as String;
+      }
+    }
+    for (final e in defaults.soundForType.entries) {
+      soundForType.putIfAbsent(e.key, () => e.value);
+    }
+
+    final config = AppConfig(
+      schoolName: json['schoolName'] is String ? json['schoolName'] as String : '',
+      templates: templates,
+      weekPlan: weekPlan,
+      sounds: sounds,
+      soundForType: soundForType,
+      holidays: list(json['holidays'], Holiday.fromJson, 'tatil'),
+      overrides: list(json['overrides'], DateOverride.fromJson, 'özel gün'),
+      specialEvents: list(json['specialEvents'], SpecialEvent.fromJson, 'etkinlik'),
+      volumePercent: _int(json['volumePercent']) ?? 100,
+      lateToleranceSeconds: _int(json['lateToleranceSeconds']) ?? 60,
+      panoIdleMinutes: _int(json['panoIdleMinutes']) ?? 3,
+    );
+    if (skipped.isNotEmpty) {
+      warnings?.add('Okunamayan kayıtlar atlandı: ${skipped.entries.map((e) => '${e.value} ${e.key}').join(', ')}.');
+    }
+    return config;
+  }
+
+  static int? _int(Object? v) => v is num ? v.toInt() : null;
 
   static const schemaVersion = 1;
 
