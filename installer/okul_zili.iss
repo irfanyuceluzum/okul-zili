@@ -47,7 +47,7 @@ Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; Tasks: deskto
 
 [Registry]
 ; Uygulamanın Ayarlar sayfasındaki anahtarla aynı kayıt.
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "OkulZili"; ValueData: """{app}\{#MyAppExe}"" --autostart"; Tasks: autostart; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "OkulZili"; ValueData: """{app}\{#MyAppExe}"" --autostart"; Tasks: autostart; Check: KeepAutostartChoice; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExe}"; Description: "Okul Zili'ni şimdi başlat"; Flags: nowait postinstall skipifsilent
@@ -56,6 +56,38 @@ Filename: "{app}\{#MyAppExe}"; Description: "Okul Zili'ni şimdi başlat"; Flags
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+const
+  RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6E0F3B52-7A41-4C7B-9C55-0B6E2D3F1A10}_is1';
+
+// Önceden kurulmuş mu (güncelleme mi)?
+function IsUpgrade(): Boolean;
+begin
+  Result := RegKeyExists(HKCU, UninstallKey);
+end;
+
+function AutostartEnabledNow(): Boolean;
+begin
+  Result := RegValueExists(HKCU, RunKey, 'OkulZili');
+end;
+
+// Güncellemede, uygulamanın Ayarlar sayfasında kapatılmış otomatik
+// başlatmayı yeniden açma: seçenek mevcut duruma göre işaretlenir.
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpSelectTasks) and IsUpgrade() and not AutostartEnabledNow() then
+    WizardSelectTasks('!autostart');
+end;
+
+// Sessiz kurulumda görev sayfası görünmez; o durumda da mevcut ayar korunur.
+function KeepAutostartChoice(): Boolean;
+begin
+  if WizardSilent() and IsUpgrade() then
+    Result := AutostartEnabledNow()
+  else
+    Result := True;
+end;
+
 // Uygulama pencere kapatılınca kapanmayıp sistem tepsisinde kaldığı için
 // güncelleme ve kaldırma öncesinde süreç sonlandırılır.
 procedure StopRunningApp();
