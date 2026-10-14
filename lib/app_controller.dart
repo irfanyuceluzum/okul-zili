@@ -233,6 +233,21 @@ class AppController extends ChangeNotifier {
   Future<void> deleteHoliday(Holiday holiday) => updateConfig(
       _config.copyWith(holidays: _config.holidays.where((h) => !identical(h, holiday)).toList()));
 
+  /// [date] gününün özel programını ayarlar; [override] null ise kaldırır ve
+  /// gün haftalık plana (ya da tatile) göre işler.
+  Future<void> setDayOverride(DateTime date, DateOverride? override) {
+    final list = [
+      ..._config.overrides.where((o) => !isSameDay(o.date, date)),
+      ?override,
+    ]..sort((a, b) => a.date.compareTo(b.date));
+    return updateConfig(_config.copyWith(overrides: list));
+  }
+
+  DateOverride? overrideOn(DateTime date) =>
+      _config.overrides.where((o) => isSameDay(o.date, date)).firstOrNull;
+
+  Holiday? holidayOn(DateTime date) => _config.holidays.where((h) => h.contains(date)).firstOrNull;
+
   /// Sonraki (bugün dahil) tatil.
   Holiday? nextHoliday() {
     final today = dateOnly(_now());

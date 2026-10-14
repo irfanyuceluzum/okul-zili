@@ -153,7 +153,7 @@ void main() {
       expect(added.start, DateTime(2026, 10, 14));
       expect(added.end, DateTime(2026, 10, 14));
       expect(controller.resolver.resolve(DateTime(2026, 10, 14)).isSchoolDay, isFalse);
-      expect(find.text('Öğretmenler toplantısı'), findsOneWidget);
+      expect(find.text('Öğretmenler toplantısı'), findsNWidgets(2), reason: 'takvim hücresi ve tatil listesi');
       expect(tester.takeException(), isNull);
     });
 
@@ -167,7 +167,7 @@ void main() {
       // İkinci tarih düğmesi "Son gün".
       await tester.tap(find.textContaining('14 Ekim 2026').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('16'));
+      await tester.tap(find.descendant(of: find.byType(DatePickerDialog), matching: find.text('16')));
       await tester.tap(find.text('Tamam'));
       await tester.pumpAndSettle();
       expect(find.text('3 gün boyunca zil çalmaz.'), findsOneWidget);
@@ -178,14 +178,17 @@ void main() {
       final added = controller.config.holidays.singleWhere((h) => h.name == 'Ara tatil');
       expect(added.start, DateTime(2026, 10, 14));
       expect(added.end, DateTime(2026, 10, 16));
-      expect(find.text('3 gün'), findsOneWidget);
+      expect(find.text('14–16 Ekim 2026 · 3 gün'), findsOneWidget);
     });
 
     testWidgets('tatil düzenlenir ve silinir', (tester) async {
       final (controller, navigation) = await pumpApp(tester);
       await openCalendar(tester, navigation);
 
-      await tester.tap(find.text('Cumhuriyet Bayramı'));
+      // Takvim hücresi değil, listedeki satır (sonra gelir).
+      await tester.ensureVisible(find.text('Cumhuriyet Bayramı').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cumhuriyet Bayramı').last);
       await tester.pumpAndSettle();
       expect(find.text('Tatili düzenle'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Cumhuriyet Bayramı (tam gün)');
@@ -195,6 +198,8 @@ void main() {
       expect(controller.config.holidays.where((h) => h.name == 'Cumhuriyet Bayramı (tam gün)'), hasLength(1));
       final count = controller.config.holidays.length;
 
+      await tester.ensureVisible(find.byTooltip('Cumhuriyet Bayramı (tam gün) tatilini sil'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Cumhuriyet Bayramı (tam gün) tatilini sil'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Sil'));
