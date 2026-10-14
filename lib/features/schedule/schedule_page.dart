@@ -312,6 +312,22 @@ class _TemplateEditorState extends State<_TemplateEditor> {
     widget.onChanged(t.copyWith(lessons: lessons));
   }
 
+  /// Ders süresini değiştirir; sonraki dersler kayar. Uygulanamazsa false.
+  bool _setLessonMinutes(int i, int minutes) {
+    final next = t.withLessonMinutes(i, minutes);
+    if (next == null) return false;
+    widget.onChanged(next);
+    return true;
+  }
+
+  /// [i]. dersten sonraki teneffüs süresini değiştirir; sonraki dersler kayar.
+  bool _setBreakMinutes(int i, int minutes) {
+    final next = t.withBreakMinutes(i, minutes);
+    if (next == null) return false;
+    widget.onChanged(next);
+    return true;
+  }
+
   void _removeLesson(int i) {
     final lessons = [...t.lessons]..removeAt(i);
     final lunch = t.lunchAfterLesson;
@@ -345,10 +361,14 @@ class _TemplateEditorState extends State<_TemplateEditor> {
         lesson: l,
         onStart: (v) => _setLesson(i, start: v),
         onEnd: (v) => _setLesson(i, end: v),
+        onMinutes: (v) => _setLessonMinutes(i, v),
         onDelete: () => _removeLesson(i),
       ));
       if (i < t.lessons.length - 1) {
         rows.add(_GapRow(
+          key: ValueKey('gap-$i'),
+          index: i,
+          onMinutes: (v) => _setBreakMinutes(i, v),
           minutes: t.lessons[i + 1].start.inMinutes - l.end.inMinutes,
           lunch: t.lunchAfterLesson == n,
         ));
@@ -525,6 +545,7 @@ class _LessonRow extends StatelessWidget {
     required this.lesson,
     required this.onStart,
     required this.onEnd,
+    required this.onMinutes,
     required this.onDelete,
   });
 
@@ -532,6 +553,7 @@ class _LessonRow extends StatelessWidget {
   final Lesson lesson;
   final ValueChanged<ClockTime> onStart;
   final ValueChanged<ClockTime> onEnd;
+  final bool Function(int minutes) onMinutes;
   final VoidCallback onDelete;
 
   @override
@@ -548,10 +570,19 @@ class _LessonRow extends StatelessWidget {
           TimeField(value: lesson.end, semanticLabel: '$number. ders bitiş', onChanged: onEnd),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              minutes > 0 ? '$minutes dk' : 'Geçersiz',
-              style: TextStyle(color: minutes > 0 ? AppColors.inkSecondary : AppColors.dangerText),
-            ),
+            child: minutes > 0
+                ? Align(
+                    alignment: Alignment.centerLeft,
+                    child: _MinutesField(
+                      key: ValueKey('lesson-minutes-${number - 1}'),
+                      value: minutes,
+                      min: 1,
+                      max: 180,
+                      semanticLabel: '$number. ders süresi',
+                      onChanged: onMinutes,
+                    ),
+                  )
+                : const Text('Geçersiz', style: TextStyle(color: AppColors.dangerText)),
           ),
           IconButton(
             tooltip: '$number. dersi sil',
@@ -565,10 +596,12 @@ class _LessonRow extends StatelessWidget {
 }
 
 class _GapRow extends StatelessWidget {
-  const _GapRow({required this.minutes, required this.lunch});
+  const _GapRow({super.key, required this.index, required this.minutes, required this.lunch, required this.onMinutes});
 
+  final int index;
   final int minutes;
   final bool lunch;
+  final bool Function(int minutes) onMinutes;
 
   @override
   Widget build(BuildContext context) {
@@ -579,7 +612,7 @@ class _GapRow extends StatelessWidget {
             ? (AppColors.lunchTint, AppColors.lunchText)
             : (AppColors.recessTint, AppColors.recessText);
     return Container(
-      height: 34,
+      height: 40,
       color: bg,
       padding: const EdgeInsets.only(left: 112, right: 24),
       child: DefaultTextStyle.merge(
@@ -589,10 +622,119 @@ class _GapRow extends StatelessWidget {
             Text(overlap ? 'Çakışma' : (lunch ? 'Öğle arası' : (minutes == 0 ? 'Ara yok' : 'Teneffüs')),
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             const Spacer(),
-            Text(overlap ? '${-minutes} dk üst üste' : '$minutes dk'),
+            if (overlap)
+              Text('${-minutes} dk üst üste')
+            else
+              _MinutesField(
+                key: ValueKey('break-minutes-$index'),
+                value: minutes,
+                min: 0,
+                max: 180,
+                semanticLabel: '${index + 1}. dersten sonra ara süresi',
+                color: fg,
+                onChanged: onMinutes,
+              ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Satır içi küçük süre alanı ("40 dk"). Geçerli sayı yazılınca [onChanged]
+/// çağrılır; false dönerse (uygulanamadı) alan kırmızı olur, odak gidince
+/// önceki değere döner. Dışarıdan değişen değeri, odakta değilken gösterir.
+class _MinutesField extends StatefulWidget {
+  const _MinutesField({
+    super.key,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.semanticLabel,
+    required this.onChanged,
+    this.color = AppColors.inkSecondary,
+  });
+
+  final int value;
+  final int min;
+  final int max;
+  final String semanticLabel;
+  final Color color;
+  final bool Function(int minutes) onChanged;
+
+  @override
+  State<_MinutesField> createState() => _MinutesFieldState();
+}
+
+class _MinutesFieldState extends State<_MinutesField> {
+  late final _controller = TextEditingController(text: '${widget.value}');
+  final _focus = FocusNode();
+  bool _invalid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus && mounted) {
+        _controller.text = '${widget.value}';
+        setState(() => _invalid = false);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_MinutesField old) {
+    super.didUpdateWidget(old);
+    if (!_focus.hasFocus && int.tryParse(_controller.text) != widget.value) {
+      _controller.text = '${widget.value}';
+      _invalid = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final border = _invalid
+        ? OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.dangerText, width: 1.5))
+        : null;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 64,
+          height: 32,
+          child: Semantics(
+            label: widget.semanticLabel,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focus,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: widget.color),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                enabledBorder: border,
+                focusedBorder: border,
+              ),
+              onChanged: (text) {
+                final v = int.tryParse(text);
+                final ok = v != null && v >= widget.min && v <= widget.max && widget.onChanged(v);
+                setState(() => _invalid = !ok);
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text('dk', style: TextStyle(fontSize: 14, color: widget.color)),
+      ],
     );
   }
 }

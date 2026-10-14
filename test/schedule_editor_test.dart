@@ -166,6 +166,71 @@ void main() {
       expect(today.bells.map((b) => b.time), contains(_t('10:20')));
     });
 
+    testWidgets('ders süresi yazılınca sonraki dersler kayar', (tester) async {
+      final (controller, _) = await pumpEditor(tester);
+      await tester.enterText(find.byKey(const ValueKey('lesson-minutes-1')), '45');
+      await tester.pumpAndSettle();
+      expect(field('10:40'), findsOneWidget, reason: '3. ders başlangıcı 5 dk kaydı');
+      expect(controller.config.templates.single.lessons[2].start, _t('10:35'), reason: 'kaydetmeden değişmez');
+
+      await tapVisible(tester, find.text('Kaydet'));
+      final lessons = controller.config.templates.single.lessons;
+      expect(lessons[1].end, _t('10:20'));
+      expect(lessons[2].start, _t('10:40'));
+    });
+
+    testWidgets('teneffüs süresi yazılınca sonraki dersler kayar', (tester) async {
+      final (controller, _) = await pumpEditor(tester);
+      await tester.enterText(find.byKey(const ValueKey('break-minutes-0')), '20');
+      await tester.pumpAndSettle();
+      final draft = controller.scheduleDraft!.selected!.lessons;
+      expect(draft[1].start, _t('09:40'));
+      expect(draft[1].minutes, 40);
+      expect(field('09:40'), findsOneWidget);
+    });
+
+    testWidgets('bitiş saati yazılınca sonraki dersler kaymaz', (tester) async {
+      final (controller, _) = await pumpEditor(tester);
+      await tester.enterText(field('10:15'), '1020');
+      await tester.pumpAndSettle();
+      final lessons = controller.scheduleDraft!.selected!.lessons;
+      expect(lessons[1].end, _t('10:20'));
+      expect(lessons[2].start, _t('10:35'));
+      final minutes = tester.widget<TextField>(find.descendant(of: find.byKey(const ValueKey('lesson-minutes-1')), matching: find.byType(TextField)));
+      expect(minutes.controller!.text, '45', reason: 'süre alanı dışarıdan değişimi gösterir');
+    });
+
+    testWidgets('uygulanamayan süre taslağı bozmaz, alan eski değere döner', (tester) async {
+      final (controller, _) = await pumpEditor(tester);
+      final before = controller.scheduleDraft!.selected!.lessons.map((l) => '$l').toList();
+      await tester.enterText(find.byKey(const ValueKey('lesson-minutes-1')), '999');
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('lesson-minutes-1')), '0');
+      await tester.pumpAndSettle();
+      expect(controller.scheduleDraft!.selected!.lessons.map((l) => '$l'), before);
+    });
+
+    testWidgets('1280x820 pencerede süre alanlarıyla taşma olmaz', (tester) async {
+      tester.view.physicalSize = const Size(1280, 820);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final controller = AppController(
+        config: createDefaultConfig(),
+        repository: ConfigRepository(File('${tmp.path}/config.json')),
+        player: SilentPlayer(),
+        now: () => DateTime(2026, 10, 14, 10, 0),
+      );
+      await tester.pumpWidget(OkulZiliApp(
+        controller: controller,
+        navigation: ValueNotifier(AppPage.program),
+        windowControls: const NoopWindowControls(),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('lesson-minutes-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('break-minutes-0')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('çakışan saatlerle kaydedilmez', (tester) async {
       final (controller, _) = await pumpEditor(tester);
       await tester.enterText(field('10:15'), '1040'); // 3. ders 10:35'te başlıyor
