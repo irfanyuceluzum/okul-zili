@@ -99,6 +99,7 @@ class AppController extends ChangeNotifier {
 
   void start() {
     system.preventSleep();
+    restoreTodayFromLog();
     _scheduler.start();
     _refreshVolume();
     _volumeTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshVolume());
@@ -463,9 +464,14 @@ class AppController extends ChangeNotifier {
   /// açılmasına izin vermeyebilir ve satır kaybolur.
   Future<void> _logWrite = Future.value();
 
+  /// Kayıt dosyası bu boyutu aşınca eskisi "zil_kayitlari.eski.log" olur.
+  static const _maxLogBytes = 2 * 1024 * 1024;
+
+  /// Satır biçimi: zaman, anahtar ("gün|kimlik@saat" ya da "-"), saat, ad,
+  /// sonuç[, açıklama] — sekmeyle ayrılmış.
   void _appendLogFile(BellLogEntry entry) {
     final file = File(logFilePath);
-    final line = '${entry.at.toIso8601String()}\t${entry.bell.time}\t'
+    final line = '${entry.at.toIso8601String()}\t${entry.key ?? '-'}\t${entry.bell.time}\t'
         '${entry.bell.label}\t${entry.outcome.label}'
         '${entry.detail == null ? '' : '\t${entry.detail}'}\n';
     _logWrite = _logWrite.then((_) async {
@@ -475,6 +481,32 @@ class AppController extends ChangeNotifier {
         debugPrint('[Zil] Kayıt dosyasına yazılamadı: $e');
       }
     });
+  }
+
+  /// Açılışta bugünkü zil sonuçlarını kayıt dosyasından geri yükler; böylece
+  /// yeniden başlatma sonrası sabah çalmış ziller "Uygulama kapalıydı"
+  /// görünmez. Dosya çok büyümüşse eskisini kenara alır.
+  @visibleForTesting
+  void restoreTodayFromLog() {
+    try {
+      final file = File(logFilePath);
+      if (!file.existsSync()) return;
+      if (file.lengthSync() > _maxLogBytes) {
+        file.renameSync(logFilePath.replaceFirst(RegExp(r'\.log$'), '.eski.log'));
+        return;
+      }
+      final today = dateKey(_now());
+      for (final line in file.readAsLinesSync()) {
+        if (!line.startsWith(today)) continue;
+        final f = line.split('\t');
+        if (f.length < 5 || !f[1].contains('|')) continue; // eski biçim ya da elle çalınan zil
+        final outcome = BellOutcome.values.where((o) => o.label == f[4]).firstOrNull;
+        if (outcome != null) _outcomes[f[1]] = outcome;
+      }
+      _scheduler.markHandled(_outcomes.keys);
+    } catch (e, st) {
+      ErrorLog.write('kayıt dosyası okuma', e, st);
+    }
   }
 
   @override

@@ -64,6 +64,10 @@ class BellScheduler {
   /// Verilen ana kadar zilleri susturur; null verilirse susturma kalkar.
   void muteUntil(DateTime? until) => _mutedUntil = until;
 
+  /// Önceden işlenmiş zilleri bildirir (ör. yeniden başlatmada kayıt
+  /// dosyasından): az önce çalmış zil tolerans içinde diye ikinci kez çalmaz.
+  void markHandled(Iterable<String> keys) => _handled.addAll(keys);
+
   /// Program değiştiğinde çağrılır: bugüne sonradan eklenen ve saati çoktan
   /// geçmiş ziller "kaçırıldı" yazılmadan atlanır.
   void scheduleChanged() => _startedAt = _now();
