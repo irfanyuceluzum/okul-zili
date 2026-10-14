@@ -10,6 +10,7 @@ import 'package:okul_zili/data/models/app_config.dart';
 import 'package:okul_zili/main.dart';
 import 'package:okul_zili/platform/audio_file_picker.dart';
 import 'package:okul_zili/platform/bell_player.dart';
+import 'package:okul_zili/platform/config_file_picker.dart';
 import 'package:okul_zili/ui/navigation.dart';
 
 class SilentPlayer implements BellPlayer {
@@ -58,6 +59,9 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
   Size size = const Size(1280, 820),
   BellPlayer? player,
   AudioFilePicker? pickAudioFile,
+  ConfigFilePicker? pickConfigFile,
+  ExportPathPicker? pickExportPath,
+
   /// Verilirse [now] yerine bu saat kullanılır (testte ileri sarmak için).
   DateTime Function()? clock,
 }) async {
@@ -79,6 +83,8 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
     player: player ?? SilentPlayer(),
     now: clock ?? () => now,
     pickAudioFile: pickAudioFile,
+    pickConfigFile: pickConfigFile,
+    pickExportPath: pickExportPath,
   );
   final navigation = ValueNotifier(page);
   await tester.pumpWidget(OkulZiliApp(

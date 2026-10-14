@@ -15,6 +15,7 @@ import 'data/models/calendar.dart';
 import 'data/schedule_draft.dart';
 import 'platform/audio_file_picker.dart';
 import 'platform/bell_player.dart';
+import 'platform/config_file_picker.dart';
 import 'platform/error_log.dart';
 import 'platform/system_services.dart';
 
@@ -28,8 +29,12 @@ class AppController extends ChangeNotifier {
     SystemServices? system,
     DateTime Function()? now,
     AudioFilePicker? pickAudioFile,
+    ConfigFilePicker? pickConfigFile,
+    ExportPathPicker? pickExportPath,
   })  : _config = config,
         pickAudioFile = pickAudioFile ?? pickAudioFileWithDialog,
+        pickConfigFile = pickConfigFile ?? pickConfigFileWithDialog,
+        pickExportPath = pickExportPath ?? pickExportPathWithDialog,
         system = system ?? const NoopSystemServices(),
         _now = now ?? DateTime.now {
     _scheduler = BellScheduler(
@@ -51,6 +56,12 @@ class AppController extends ChangeNotifier {
 
   /// Ses dosyası seçme penceresi (testlerde sahtesiyle değiştirilir).
   final AudioFilePicker pickAudioFile;
+
+  /// Açılacak ayar dosyasını seçtirir (vazgeçilirse null).
+  final ConfigFilePicker pickConfigFile;
+
+  /// Ayarların yazılacağı yolu seçtirir (vazgeçilirse null).
+  final ExportPathPicker pickExportPath;
 
   final ConfigRepository repository;
   final BellPlayer player;
@@ -265,6 +276,80 @@ class AppController extends ChangeNotifier {
 
   Future<void> deleteHoliday(Holiday holiday) => updateConfig(
       _config.copyWith(holidays: _config.holidays.where((h) => !identical(h, holiday)).toList()));
+
+  // ---- Yedekten geri yükleme / ayar dosyası alma-verme ---------------------
+
+  AppConfig? _configBeforeReplace;
+
+  /// Son geri yükleme/içe aktarmadan önceki ayar var mı ([undoReplace] için).
+  bool get canUndoReplace => _configBeforeReplace != null;
+
+  Future<ReplaceResult> restoreBackup(BackupInfo backup) => _replaceFrom(backup.file);
+
+  Future<ReplaceResult> importConfigFile(String path) => _replaceFrom(File(path));
+
+  /// Dosya okunamazsa hiçbir şey değişmez. Okunursa önce mevcut ayar yedeklenir,
+  /// kaydedilmemiş program taslağı atılır, sonra yeni ayar uygulanır.
+  Future<ReplaceResult> _replaceFrom(File source) async {
+    final AppConfig loaded;
+    final List<String> warnings;
+    try {
+      final read = repository.readConfigFile(source);
+      loaded = read.$1;
+      warnings = [...read.$2];
+    } catch (e) {
+      return ReplaceResult(ok: false, error: 'Dosya okunamadı; ayarlar değişmedi. Bozuk ya da bu uygulamanın ayar dosyası değil. ($e)');
+    }
+    repository.snapshot();
+    _scheduleDraft = null;
+    final before = _config;
+
+    final sep = Platform.pathSeparator;
+    final soundsDir = '${repository.file.parent.path}${sep}sesler';
+    final missing = <String>[];
+    final sounds = <BellSound>[];
+    for (final s in loaded.sounds) {
+      if (s.isAsset || File(s.path).existsSync()) {
+        sounds.add(s);
+        continue;
+      }
+      final fileName = s.path.split(RegExp(r'[/\\]')).last;
+      final alt = '$soundsDir$sep$fileName';
+      if (fileName.isNotEmpty && File(alt).existsSync()) {
+        sounds.add(BellSound(id: s.id, name: s.name, path: alt));
+      } else {
+        missing.add(s.name);
+        sounds.add(s);
+      }
+    }
+
+    _configBeforeReplace = before;
+    final saved = await updateConfig(loaded.copyWith(sounds: sounds));
+    if (!saved) {
+      warnings.add('Yeni ayar diske kaydedilemedi; uygulama yeniden açılınca eski ayara dönebilir.');
+    }
+    return ReplaceResult(ok: true, missingSounds: missing, warnings: warnings);
+  }
+
+  /// Son geri yükleme/içe aktarma öncesi ayarı geri getirir (bir kez).
+  Future<bool> undoReplace() async {
+    final previous = _configBeforeReplace;
+    if (previous == null) return false;
+    _configBeforeReplace = null;
+    _scheduleDraft = null;
+    await updateConfig(previous);
+    return true;
+  }
+
+  /// Ayarları [path] dosyasına yazar; hata varsa metni, başarıda null döner.
+  Future<String?> exportConfig(String path) async {
+    try {
+      await File(path).writeAsString(repository.exportJson(_config), flush: true);
+      return null;
+    } catch (e) {
+      return 'Ayarlar dosyaya yazılamadı: $e';
+    }
+  }
 
   // ---- Zil sesleri ---------------------------------------------------------
 
@@ -517,4 +602,16 @@ class AppController extends ChangeNotifier {
     _volumeTimer?.cancel();
     super.dispose();
   }
+}
+
+/// Yedekten geri yükleme / ayar dosyası içe aktarma sonucu.
+class ReplaceResult {
+  const ReplaceResult({required this.ok, this.error, this.missingSounds = const [], this.warnings = const []});
+
+  final bool ok;
+  final String? error;
+
+  /// Dosyası bulunamayan seslerin adları (çalarken klasik zil çalar).
+  final List<String> missingSounds;
+  final List<String> warnings;
 }

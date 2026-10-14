@@ -197,10 +197,9 @@ class ConfigRepository {
   /// `config-2026-10-15T09-12-30.json` -> "2026-10-15 09:12".
   static String _labelOf(File f) {
     final name = f.uri.pathSegments.last;
-    final stamp = name.substring('config-'.length, name.length - '.json'.length);
-    final parts = stamp.split('T');
-    final time = parts.length == 2 ? parts[1].split('-').take(2).join(':') : '';
-    return '${parts.first} $time'.trim();
+    final m = RegExp(r'^config-(\d{4}-\d{2}-\d{2})(?:T(\d{2})-(\d{2}))?').firstMatch(name);
+    if (m == null) return name; // biçim dışı ad: ham adla etiketle
+    return m.group(2) == null ? m.group(1)! : '${m.group(1)} ${m.group(2)}:${m.group(3)}';
   }
 
   /// En yeni okunabilir yedek ve tarihi ("2026-10-15 09:12").

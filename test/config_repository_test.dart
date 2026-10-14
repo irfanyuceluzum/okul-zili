@@ -182,4 +182,13 @@ void main() {
     final loaded = await repo.load();
     expect(loaded.sounds.firstWhere((s) => s.id == 'u2').path, abs);
   });
+
+  test('biçim dışı adlı config-*.json yedeği listeyi bozmaz', () async {
+    await repo.save(createDefaultConfig());
+    await repo.save(createDefaultConfig().copyWith(schoolName: 'B'));
+    File('${repo.backupDir.path}${Platform.pathSeparator}config-eski-kopya.json').writeAsStringSync('{}');
+    final list = repo.listBackups();
+    expect(list.map((b) => b.label), contains('config-eski-kopya.json'));
+    expect(list, hasLength(2));
+  });
 }
