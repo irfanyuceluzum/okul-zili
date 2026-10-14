@@ -27,7 +27,10 @@ class TimeField extends StatefulWidget {
     try {
       if (t.contains(':') || t.contains('.')) return ClockTime.parse(t);
       if (t.length == 3 || t.length == 4) {
-        return ClockTime.tryCreate(int.parse(t.substring(0, t.length - 2)), int.parse(t.substring(t.length - 2)));
+        return ClockTime.tryCreate(
+          int.parse(t.substring(0, t.length - 2)),
+          int.parse(t.substring(t.length - 2)),
+        );
       }
       if (t.length <= 2) return ClockTime.tryCreate(int.parse(t), 0);
     } catch (_) {}
@@ -39,7 +42,9 @@ class TimeField extends StatefulWidget {
 }
 
 class _TimeFieldState extends State<TimeField> {
-  late final _controller = TextEditingController(text: widget.value?.toString() ?? '');
+  late final _controller = TextEditingController(
+    text: widget.value?.toString() ?? '',
+  );
   final _focus = FocusNode();
   bool _invalid = false;
 
@@ -84,28 +89,43 @@ class _TimeFieldState extends State<TimeField> {
   Widget build(BuildContext context) {
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: _invalid ? AppColors.danger : AppColors.lineStrong, width: _invalid ? 2 : 1),
+      borderSide: BorderSide(
+        color: _invalid ? AppColors.danger : AppColors.lineStrong,
+        width: _invalid ? 2 : 1,
+      ),
     );
     return SizedBox(
       width: widget.width,
-      child: Semantics(
-        label: widget.semanticLabel,
-        child: TextField(
-          controller: _controller,
-          focusNode: _focus,
-          onChanged: _changed,
-          keyboardType: TextInputType.datetime,
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9:.]')),
-            LengthLimitingTextInputFormatter(5),
-          ],
-          style: const TextStyle(fontSize: 15, fontFeatures: tabularFigures),
-          decoration: InputDecoration(
-            hintText: 'ss:dd',
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            enabledBorder: border,
-            focusedBorder: border.copyWith(
-              borderSide: BorderSide(color: _invalid ? AppColors.danger : AppColors.lesson, width: 2),
+      child: Tooltip(
+        message: _invalid
+            ? 'Geçersiz saat. 08:40 ya da 0840 biçiminde yazın (00:00–23:59).'
+            : '',
+        child: Semantics(
+          label: widget.semanticLabel,
+          hint: _invalid ? 'Geçersiz saat' : null,
+          child: TextField(
+            controller: _controller,
+            focusNode: _focus,
+            onChanged: _changed,
+            keyboardType: TextInputType.datetime,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9:.]')),
+              LengthLimitingTextInputFormatter(5),
+            ],
+            style: const TextStyle(fontSize: 15, fontFeatures: tabularFigures),
+            decoration: InputDecoration(
+              hintText: 'ss:dd',
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              enabledBorder: border,
+              focusedBorder: border.copyWith(
+                borderSide: BorderSide(
+                  color: _invalid ? AppColors.danger : AppColors.lesson,
+                  width: 2,
+                ),
+              ),
             ),
           ),
         ),

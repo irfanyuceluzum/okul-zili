@@ -176,7 +176,9 @@ class AppController extends ChangeNotifier {
   /// döner ve uyarı bandında gösterilir (ayar bellekte geçerli kalır).
   Future<bool> updateConfig(AppConfig config) async {
     _config = config;
-    _scheduler.scheduleChanged();
+    _scheduler
+      ..tolerance = Duration(seconds: config.lateToleranceSeconds)
+      ..scheduleChanged();
     notifyListeners();
     var saved = true;
     try {

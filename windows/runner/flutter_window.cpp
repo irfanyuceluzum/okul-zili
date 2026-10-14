@@ -27,14 +27,11 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  // Pencereyi burada göstermiyoruz: Dart tarafı (window_manager) gösterir.
-  // Bilgisayar açılışında --autostart ile başlatılınca uygulama pencere
-  // açmadan yalnızca sistem tepsisinde çalışır.
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {});
-
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
+  // Pencere burada gösterilmez (şablondaki ilk karede Show() çağrısı
+  // kaldırıldı): Dart tarafı window_manager ile gösterir. Bilgisayar
+  // açılışında --autostart ile başlatılınca uygulama pencere açmadan yalnızca
+  // sistem tepsisinde çalışır. Açılışta hata olursa da Dart pencereyi açar
+  // (lib/main.dart).
   flutter_controller_->ForceRedraw();
 
   return true;

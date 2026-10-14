@@ -22,7 +22,7 @@ class SoundsPage extends StatelessWidget {
     (BellType.dayEnd, 'Son ders bitince'),
     (BellType.special, 'Kendi sesi seçilmemiş etkinlikler'),
     (BellType.manual, '"Şimdi zil çal" düğmesi'),
-    (BellType.emergency, 'Acil durum düğmesi'),
+    (BellType.emergency, '"Acil durum alarmı" düğmesi'),
   ];
 
   void _snack(BuildContext context, String text) =>

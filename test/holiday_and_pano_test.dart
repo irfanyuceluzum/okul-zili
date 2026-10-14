@@ -2,24 +2,16 @@ import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:okul_zili/app_controller.dart';
 import 'package:okul_zili/data/config_repository.dart';
 import 'package:okul_zili/data/default_config.dart';
 import 'package:okul_zili/data/models/app_config.dart';
 import 'package:okul_zili/main.dart';
-import 'package:okul_zili/platform/bell_player.dart';
 import 'package:okul_zili/platform/system_services.dart';
 import 'package:okul_zili/ui/navigation.dart';
 
-class _SilentPlayer implements BellPlayer {
-  @override
-  Future<void> play(BellSound sound, {required int volumePercent, bool loop = false}) async {}
-
-  @override
-  Future<void> stop() async {}
-}
+import 'support/app_harness.dart';
 
 /// Sistem boşta süresini testten ayarlanabilen sahte servis.
 class _FakeSystem extends NoopSystemServices {
@@ -37,14 +29,7 @@ class _RecordingWindow extends NoopWindowControls {
 }
 
 void main() {
-  setUpAll(() async {
-    final loader = FontLoader('IBM Plex Sans');
-    for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
-      final bytes = File('assets/fonts/IBMPlexSans-$weight.ttf').readAsBytesSync();
-      loader.addFont(Future.value(ByteData.sublistView(bytes)));
-    }
-    await loader.load();
-  });
+  setUpAll(loadAppFont);
 
   late Directory tmp;
   setUp(() => tmp = Directory.systemTemp.createTempSync('okul_zili_test'));
@@ -67,7 +52,7 @@ void main() {
     final controller = AppController(
       config: config ?? createDefaultConfig(),
       repository: ConfigRepository(File('${tmp.path}/config.json')),
-      player: _SilentPlayer(),
+      player: SilentPlayer(),
       system: system,
       now: () => now,
     );

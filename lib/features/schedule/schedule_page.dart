@@ -483,14 +483,31 @@ class _TemplateEditorState extends State<_TemplateEditor> {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.line))),
             child: errors.isEmpty
-                ? Row(
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(child: Text.rich(TextSpan(children: [
-                        const TextSpan(text: 'Bu şablon günde '),
-                        TextSpan(text: '$bellCount zil', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        const TextSpan(text: ' çalar.'),
-                      ]))),
-                      const StatusChip(icon: Icons.check, label: 'Çakışma yok'),
+                      Row(
+                        children: [
+                          Expanded(child: Text.rich(TextSpan(children: [
+                            const TextSpan(text: 'Bu şablon günde '),
+                            TextSpan(text: '$bellCount zil', style: const TextStyle(fontWeight: FontWeight.w700)),
+                            const TextSpan(text: ' çalar.'),
+                          ]))),
+                          const StatusChip(icon: Icons.check, label: 'Çakışma yok'),
+                        ],
+                      ),
+                      for (final note in t.notes())
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.info_outline, size: 18, color: AppColors.lunchText),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(note, style: const TextStyle(fontSize: 13, color: AppColors.lunchText))),
+                            ],
+                          ),
+                        ),
                     ],
                   )
                 : _ErrorBox(title: 'Bu şablonda sorun var:', errors: errors),
@@ -613,7 +630,27 @@ class _QuickFillState extends State<_QuickFill> {
     _lunchMin = lunch != null && lunch < ls.length ? ls[lunch].start.inMinutes - ls[lunch - 1].end.inMinutes : 30;
   }
 
-  void _apply() {
+  Future<void> _apply() async {
+    final current = widget.template.lessons.length;
+    if (current > 0) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Saatler yeniden hesaplansın mı?'),
+          content: Text('Mevcut $current dersin saatleri hesaplananlarla değişecek. '
+              'Kaydet\'e basana kadar ziller etkilenmez; Vazgeç ile geri alabilirsiniz.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Vazgeç')),
+            FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Hesapla'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
     try {
       final lessons = ScheduleTemplate.generateLessons(
         firstStart: _first,

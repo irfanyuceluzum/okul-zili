@@ -79,9 +79,12 @@ class WindowsSystemServices implements SystemServices {
   }
 
   @override
+  /// Kayıt var ve bu programı gösteriyorsa açık sayılır. Eski bir kurulum
+  /// yolunu gösteren kayıt "kapalı" görünür; açınca doğru yol yazılır.
   Future<bool> isAutostartEnabled() async {
     final result = await Process.run('reg', ['query', _runKey, '/v', _valueName]);
-    return result.exitCode == 0;
+    if (result.exitCode != 0) return false;
+    return '${result.stdout}'.toLowerCase().contains(Platform.resolvedExecutable.toLowerCase());
   }
 
   @override

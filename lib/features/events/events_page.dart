@@ -243,7 +243,7 @@ class _EventRow extends StatelessWidget {
             ),
           ),
           if (!e.enabled) const Pill('Kapalı', background: AppColors.neutralTint, foreground: AppColors.inkSecondary),
-          TextButton.icon(onPressed: onTest, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Dene')),
+          TextButton.icon(onPressed: onTest, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Dinle')),
           IconButton(tooltip: '${e.name} düzenle', onPressed: onEdit, icon: const Icon(Icons.edit_outlined, color: AppColors.inkMuted)),
           IconButton(tooltip: '${e.name} sil', onPressed: onDelete, icon: const Icon(Icons.delete_outline, color: AppColors.inkMuted)),
         ],

@@ -143,6 +143,27 @@ class ScheduleTemplate {
     return errors;
   }
 
+  /// Kaydetmeyi engellemeyen ama bilinmesi gereken durumlar (çalmayacak
+  /// öğretmen zili, aynı anda çalan iki zil).
+  List<String> notes() {
+    final notes = <String>[];
+    final t = teacherBellMinutesBefore;
+    if (t > 0 && assemblyTime != null && lessons.isNotEmpty &&
+        lessons.first.start.inMinutes - assemblyTime!.inMinutes <= t) {
+      notes.add('Toplanma ile 1. ders arası $t dk ya da daha kısa; 1. ders öğretmen zili çalmayacak.');
+    }
+    for (var i = 1; i < lessons.length; i++) {
+      final gap = lessons[i].start.inMinutes - lessons[i - 1].end.inMinutes;
+      if (gap == 0) {
+        notes.add('$i. ders ile ${i + 1}. ders arasında teneffüs yok; çıkış ve giriş zili aynı anda çalar, '
+            'biri duyulmaz.');
+      } else if (gap > 0 && t > 0 && gap <= t) {
+        notes.add('$i. dersten sonraki teneffüs $gap dk; ${i + 1}. ders öğretmen zili çalmayacak.');
+      }
+    }
+    return notes;
+  }
+
   /// Şablondan günün zillerini saat sırasıyla üretir.
   List<BellEvent> generateBells() {
     final bells = <BellEvent>[];

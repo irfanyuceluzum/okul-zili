@@ -38,7 +38,8 @@ class BellScheduler {
   final String? Function()? holdReason;
 
   /// Zil saatinden bu kadar sonrasına kadar geç de olsa çalınır.
-  final Duration tolerance;
+  /// Ayar değişince [AppController] günceller.
+  Duration tolerance;
   final Duration maxSleep;
 
   final Now _now;

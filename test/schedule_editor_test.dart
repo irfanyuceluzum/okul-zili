@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:okul_zili/app_controller.dart';
 import 'package:okul_zili/core/clock_time.dart';
@@ -10,22 +9,14 @@ import 'package:okul_zili/core/scheduler/bell_scheduler.dart';
 import 'package:okul_zili/core/scheduler/day_schedule.dart';
 import 'package:okul_zili/data/config_repository.dart';
 import 'package:okul_zili/data/default_config.dart';
-import 'package:okul_zili/data/models/app_config.dart';
 import 'package:okul_zili/data/models/calendar.dart';
 import 'package:okul_zili/data/models/schedule_template.dart';
 import 'package:okul_zili/data/schedule_draft.dart';
 import 'package:okul_zili/main.dart';
-import 'package:okul_zili/platform/bell_player.dart';
 import 'package:okul_zili/ui/navigation.dart';
 import 'package:okul_zili/ui/time_field.dart';
 
-class _SilentPlayer implements BellPlayer {
-  @override
-  Future<void> play(BellSound sound, {required int volumePercent, bool loop = false}) async {}
-
-  @override
-  Future<void> stop() async {}
-}
+import 'support/app_harness.dart';
 
 ClockTime _t(String s) => ClockTime.parse(s);
 
@@ -119,14 +110,7 @@ void main() {
   });
 
   group('Düzenleme ekranı', () {
-    setUpAll(() async {
-      final loader = FontLoader('IBM Plex Sans');
-      for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
-        final bytes = File('assets/fonts/IBMPlexSans-$weight.ttf').readAsBytesSync();
-        loader.addFont(Future.value(ByteData.sublistView(bytes)));
-      }
-      await loader.load();
-    });
+    setUpAll(loadAppFont);
 
     late Directory tmp;
     setUp(() => tmp = Directory.systemTemp.createTempSync('okul_zili_test'));
@@ -143,7 +127,7 @@ void main() {
       final controller = AppController(
         config: createDefaultConfig(),
         repository: ConfigRepository(File('${tmp.path}/config.json')),
-        player: _SilentPlayer(),
+        player: SilentPlayer(),
         now: () => DateTime(2026, 10, 14, 10, 0),
       );
       final navigation = ValueNotifier(AppPage.program);
@@ -196,6 +180,9 @@ void main() {
     testWidgets('hızlı doldur saatleri hesaplar', (tester) async {
       final (controller, _) = await pumpEditor(tester);
       await tapVisible(tester, find.text('Saatleri hesapla'));
+      expect(find.text('Saatler yeniden hesaplansın mı?'), findsOneWidget);
+      await tester.tap(find.text('Hesapla'));
+      await tester.pumpAndSettle();
       final lessons = controller.scheduleDraft!.selected!.lessons;
       // Varsayılanlar mevcut şablondan: 40 dk ders, 15 dk teneffüs, 4. dersten sonra 30 dk.
       expect(lessons.map((l) => '$l').take(3), ['08:40–09:20', '09:35–10:15', '10:30–11:10']);

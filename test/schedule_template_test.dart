@@ -80,6 +80,25 @@ void main() {
     });
   });
 
+  test('kısa teneffüs ve aynı dakikadaki ziller için uyarı verilir', () {
+    final t = ScheduleTemplate(
+      id: 'x',
+      name: 'x',
+      teacherBellMinutesBefore: 2,
+      lessons: [
+        Lesson(ClockTime.parse('08:40'), ClockTime.parse('09:20')),
+        Lesson(ClockTime.parse('09:20'), ClockTime.parse('10:00')),
+        Lesson(ClockTime.parse('10:02'), ClockTime.parse('10:40')),
+      ],
+    );
+    expect(t.validate(), isEmpty);
+    expect(t.notes(), [
+      contains('teneffüs yok'),
+      contains('3. ders öğretmen zili çalmayacak'),
+    ]);
+    expect(normalDayTemplate.notes(), isEmpty);
+  });
+
   test('çakışan dersler doğrulamada yakalanır', () {
     final t = ScheduleTemplate(
       id: 'x',
