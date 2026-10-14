@@ -99,6 +99,57 @@ void main() {
     expect(normalDayTemplate.notes(), isEmpty);
   });
 
+  group('Süre tabanlı kaydırma', () {
+    String fmt(ScheduleTemplate t) => t.lessons.map((l) => '$l').join(' ');
+
+    test('withLessonMinutes sonraki dersleri kaydırır, teneffüsler sabit kalır', () {
+      final t = normalDayTemplate.withLessonMinutes(1, 45)!;
+      expect(t.validate(), isEmpty);
+      expect(t.lessons[1].toString(), '09:35–10:20');
+      expect(t.lessons[2].toString(), '10:40–11:20');
+      expect(t.lessons[5].toString(), '13:40–14:20');
+      expect(t.lessons[0], normalDayTemplate.lessons[0]);
+      for (var i = 1; i < t.lessons.length; i++) {
+        expect(
+          t.lessons[i].start.inMinutes - t.lessons[i - 1].end.inMinutes,
+          normalDayTemplate.lessons[i].start.inMinutes - normalDayTemplate.lessons[i - 1].end.inMinutes,
+        );
+      }
+    });
+
+    test('withBreakMinutes sonraki dersleri kaydırır, ders süreleri sabit kalır', () {
+      final t = normalDayTemplate.withBreakMinutes(0, 20)!;
+      expect(t.validate(), isEmpty);
+      expect(t.lessons[1].toString(), '09:40–10:20');
+      expect(t.lessons[5].toString(), '13:40–14:20');
+      expect(t.lessons.map((l) => l.minutes), normalDayTemplate.lessons.map((l) => l.minutes));
+      expect(t.lessons[0], normalDayTemplate.lessons[0]);
+    });
+
+    test('diğer alanlar değişmez', () {
+      final base = normalDayTemplate.copyWith(lunchAfterLesson: () => 4);
+      for (final t in [base.withLessonMinutes(0, 50)!, base.withBreakMinutes(2, 3)!]) {
+        expect(t.id, base.id);
+        expect(t.name, base.name);
+        expect(t.assemblyTime, base.assemblyTime);
+        expect(t.teacherBellMinutesBefore, base.teacherBellMinutesBefore);
+        expect(t.lunchAfterLesson, 4);
+      }
+    });
+
+    test('taşma ve geçersiz girdi null döner', () {
+      expect(normalDayTemplate.withLessonMinutes(0, 1000), isNull);
+      expect(normalDayTemplate.withBreakMinutes(0, 1000), isNull);
+      expect(normalDayTemplate.withLessonMinutes(0, 0), isNull);
+      expect(normalDayTemplate.withLessonMinutes(6, 40), isNull);
+      expect(normalDayTemplate.withLessonMinutes(-1, 40), isNull);
+      expect(normalDayTemplate.withBreakMinutes(0, -1), isNull);
+      expect(normalDayTemplate.withBreakMinutes(5, 10), isNull);
+      expect(normalDayTemplate.withBreakMinutes(-1, 10), isNull);
+      expect(fmt(normalDayTemplate.withBreakMinutes(0, 15)!), fmt(normalDayTemplate));
+    });
+  });
+
   test('çakışan dersler doğrulamada yakalanır', () {
     final t = ScheduleTemplate(
       id: 'x',

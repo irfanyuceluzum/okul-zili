@@ -96,6 +96,44 @@ class ScheduleTemplate {
         lunchAfterLesson: lunchAfterLesson == null ? this.lunchAfterLesson : lunchAfterLesson(),
       );
 
+  /// [index]. dersin (0 tabanlı) süresini [minutes] yapar; sonraki tüm dersler
+  /// aynı farkla kayar, teneffüs süreleri değişmez. Geçersiz index, 1 dakikadan
+  /// kısa süre ya da gün dışına taşan saatte null döner.
+  ScheduleTemplate? withLessonMinutes(int index, int minutes) {
+    if (index < 0 || index >= lessons.length || minutes < 1) return null;
+    final delta = minutes - lessons[index].minutes;
+    final shifted = <Lesson>[...lessons.take(index)];
+    final end = lessons[index].start.tryAddMinutes(minutes);
+    if (end == null) return null;
+    shifted.add(Lesson(lessons[index].start, end));
+    final rest = _shifted(index + 1, delta);
+    if (rest == null) return null;
+    return copyWith(lessons: [...shifted, ...rest]);
+  }
+
+  /// [index]. dersten (0 tabanlı) sonraki teneffüsü [minutes] yapar; sonraki
+  /// tüm dersler aynı farkla kayar, ders süreleri değişmez. Son ders, geçersiz
+  /// index, negatif süre ya da gün dışına taşan saatte null döner.
+  ScheduleTemplate? withBreakMinutes(int index, int minutes) {
+    if (index < 0 || index >= lessons.length - 1 || minutes < 0) return null;
+    final delta = minutes - (lessons[index + 1].start.inMinutes - lessons[index].end.inMinutes);
+    final rest = _shifted(index + 1, delta);
+    if (rest == null) return null;
+    return copyWith(lessons: [...lessons.take(index + 1), ...rest]);
+  }
+
+  /// [from]. dersten sonuna kadar olan dersleri [delta] dakika kaydırır.
+  List<Lesson>? _shifted(int from, int delta) {
+    final result = <Lesson>[];
+    for (final l in lessons.skip(from)) {
+      final s = l.start.tryAddMinutes(delta);
+      final e = l.end.tryAddMinutes(delta);
+      if (s == null || e == null) return null;
+      result.add(Lesson(s, e));
+    }
+    return result;
+  }
+
   final String id;
   final String name;
 
