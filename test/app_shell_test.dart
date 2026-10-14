@@ -37,7 +37,13 @@ void main() {
 
   late Directory tmp;
   setUp(() => tmp = Directory.systemTemp.createTempSync('okul_zili_test'));
-  tearDown(() => tmp.deleteSync(recursive: true));
+  tearDown(() {
+    // Windows, kayıt dosyası hâlâ yazılırken klasörü silmeye izin vermez;
+    // geçici klasör olduğu için silinemezse sorun değil.
+    try {
+      tmp.deleteSync(recursive: true);
+    } on FileSystemException catch (_) {}
+  });
 
   Future<(AppController, ValueNotifier<AppPage>)> pumpApp(
     WidgetTester tester, {

@@ -247,12 +247,22 @@ class AppController extends ChangeNotifier {
   String get logFilePath =>
       '${repository.file.parent.path}${Platform.pathSeparator}zil_kayitlari.log';
 
+  /// Yazmalar sıraya konur: Windows aynı dosyanın aynı anda iki kez
+  /// açılmasına izin vermeyebilir ve satır kaybolur.
+  Future<void> _logWrite = Future.value();
+
   void _appendLogFile(BellLogEntry entry) {
     final file = File(logFilePath);
     final line = '${entry.at.toIso8601String()}\t${entry.bell.time}\t'
         '${entry.bell.label}\t${entry.outcome.label}'
         '${entry.detail == null ? '' : '\t${entry.detail}'}\n';
-    file.writeAsString(line, mode: FileMode.append, flush: true).catchError((_) => file);
+    _logWrite = _logWrite.then((_) async {
+      try {
+        await file.writeAsString(line, mode: FileMode.append, flush: true);
+      } catch (e) {
+        debugPrint('[Zil] Kayıt dosyasına yazılamadı: $e');
+      }
+    });
   }
 
   @override
