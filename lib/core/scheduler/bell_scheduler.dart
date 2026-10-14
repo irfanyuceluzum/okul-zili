@@ -43,6 +43,10 @@ class BellScheduler {
 
   final Now _now;
   final Set<String> _handled = {};
+
+  /// Bir zilin o günkü kaydının anahtarı. Saat de anahtarın parçasıdır:
+  /// çaldıktan sonra saati ileri alınan zil yeni saatinde yeniden çalar.
+  static String keyFor(DateTime day, BellEvent bell) => '${dateKey(day)}|${bell.id}@${bell.time}';
   DateTime? _startedAt;
   DateTime? _mutedUntil;
   Timer? _timer;
@@ -101,7 +105,7 @@ class BellScheduler {
       final at = day.timeOf(bell);
       if (at.isAfter(now)) break;
 
-      final key = '$dayPrefix${bell.id}';
+      final key = keyFor(day.date, bell);
       if (!_handled.add(key)) continue;
 
       // Uygulama açılmadan önce geçmiş ziller sessizce atlanır; bunlar

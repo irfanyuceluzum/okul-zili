@@ -3,7 +3,10 @@ import 'package:okul_zili/core/scheduler/bell_log.dart';
 import 'package:okul_zili/core/scheduler/bell_scheduler.dart';
 import 'package:okul_zili/core/scheduler/day_schedule.dart';
 import 'package:okul_zili/data/default_config.dart';
+import 'package:okul_zili/core/clock_time.dart';
+import 'package:okul_zili/data/models/app_config.dart';
 import 'package:okul_zili/data/models/bell_event.dart';
+import 'package:okul_zili/data/models/schedule_template.dart';
 
 /// Gerçek saati beklemeden zamanlayıcıyı adım adım sürmek için düzenek.
 class _Harness {
@@ -184,6 +187,60 @@ void main() {
     now = _wed(8, 38);
     await scheduler.tick();
     expect(rung.map((b) => b.id), ['L1-teacher']);
+  });
+
+  group('gün içinde program değişince', () {
+    // 3. dersi [start]'ta başlatan program.
+    AppConfig withThirdLesson(String start, String end) {
+      final base = createDefaultConfig();
+      final lessons = [...normalDayTemplate.lessons];
+      lessons[2] = Lesson(ClockTime.parse(start), ClockTime.parse(end));
+      return base.copyWith(templates: [normalDayTemplate.copyWith(lessons: lessons)]);
+    }
+
+    test('çalmış zilin saati ileri alınınca yeni saatte yeniden çalar', () async {
+      var config = createDefaultConfig();
+      var now = _wed(10, 0);
+      final rung = <String>[];
+      final logs = <BellLogEntry>[];
+      final scheduler = BellScheduler(
+        resolveDay: (d) => ScheduleResolver(config).resolve(d),
+        ring: (b) async {
+          rung.add('${b.id}@${b.time}');
+          return null;
+        },
+        onLog: logs.add,
+        now: () => now,
+      );
+      now = _wed(10, 35);
+      await scheduler.tick();
+      expect(rung, ['L3-start@10:35']);
+
+      now = _wed(10, 40);
+      config = withThirdLesson('10:50', '11:30');
+      scheduler.scheduleChanged();
+      await scheduler.tick();
+      now = _wed(10, 50);
+      await scheduler.tick();
+      expect(rung, ['L3-start@10:35', 'L3-start@10:50']);
+    });
+
+    test('saati geçmişe alınan zil çalmaz ve "kaçırıldı" yazılmaz', () async {
+      var config = createDefaultConfig();
+      var now = _wed(10, 0);
+      final logs = <BellLogEntry>[];
+      final scheduler = BellScheduler(
+        resolveDay: (d) => ScheduleResolver(config).resolve(d),
+        ring: (_) async => null,
+        onLog: logs.add,
+        now: () => now,
+      );
+      now = _wed(10, 30);
+      config = withThirdLesson('10:20', '11:00'); // 10:20 artık geçmişte
+      scheduler.scheduleChanged();
+      await scheduler.tick();
+      expect(logs.where((l) => l.bell.id == 'L3-start'), isEmpty);
+    });
   });
 
   test('elle çalınan zil susturmayı yok sayar', () async {

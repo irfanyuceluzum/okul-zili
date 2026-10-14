@@ -76,8 +76,7 @@ class AppController extends ChangeNotifier {
   /// "gün|zil kimliği" → sonuç; bugünkü listede durum göstermek için.
   final Map<String, BellOutcome> _outcomes = {};
 
-  BellOutcome? outcomeOf(DaySchedule day, BellEvent bell) =>
-      _outcomes['${dateKey(day.date)}|${bell.id}'];
+  BellOutcome? outcomeOf(DaySchedule day, BellEvent bell) => _outcomes[BellScheduler.keyFor(day.date, bell)];
 
   // ---- Durum --------------------------------------------------------------
 

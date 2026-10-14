@@ -7,6 +7,12 @@ class ClockTime implements Comparable<ClockTime> {
       : assert(hour >= 0 && hour < 24),
         assert(minute >= 0 && minute < 60);
 
+  /// Saat ve dakika geçerliyse oluşturur, değilse null. Kullanıcı
+  /// girdisinde bunu kullanın: kurucudaki assert yayın derlemesinde çalışmaz
+  /// ve "25:00" sessizce kabul edilirdi.
+  static ClockTime? tryCreate(int hour, int minute) =>
+      hour >= 0 && hour < 24 && minute >= 0 && minute < 60 ? ClockTime(hour, minute) : null;
+
   /// "08:40" veya "08.40" biçimindeki metni çözümler.
   factory ClockTime.parse(String text) {
     final parts = text.trim().split(RegExp('[:.]'));

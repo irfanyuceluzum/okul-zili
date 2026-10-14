@@ -27,9 +27,9 @@ class TimeField extends StatefulWidget {
     try {
       if (t.contains(':') || t.contains('.')) return ClockTime.parse(t);
       if (t.length == 3 || t.length == 4) {
-        return ClockTime(int.parse(t.substring(0, t.length - 2)), int.parse(t.substring(t.length - 2)));
+        return ClockTime.tryCreate(int.parse(t.substring(0, t.length - 2)), int.parse(t.substring(t.length - 2)));
       }
-      if (t.length <= 2) return ClockTime(int.parse(t), 0);
+      if (t.length <= 2) return ClockTime.tryCreate(int.parse(t), 0);
     } catch (_) {}
     return null;
   }

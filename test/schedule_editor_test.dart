@@ -64,6 +64,14 @@ void main() {
       expect(TimeField.parse('2500'), isNull);
       expect(TimeField.parse('08:60'), isNull);
       expect(TimeField.parse(''), isNull);
+      expect(TimeField.parse('99'), isNull);
+    });
+
+    test("aralık dışı saat assert'e güvenmeden reddedilir (yayın derlemesi)", () {
+      expect(ClockTime.tryCreate(25, 0), isNull);
+      expect(ClockTime.tryCreate(8, 75), isNull);
+      expect(ClockTime.tryCreate(-1, 0), isNull);
+      expect(ClockTime.tryCreate(23, 59), const ClockTime(23, 59));
     });
   });
 
