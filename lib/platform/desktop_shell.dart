@@ -8,6 +8,9 @@ import '../app_controller.dart';
 import '../ui/lock_dialog.dart';
 import '../ui/navigation.dart';
 import 'error_log.dart';
+import 'notice_presenter.dart';
+import 'notifier.dart';
+import 'windows/windows_notifier.dart';
 
 /// Pencere ve sistem tepsisi. Pencerenin çarpısı uygulamayı kapatmaz,
 /// yalnızca gizler; ziller tepside çalışmaya devam eder. Tamamen kapatmak
@@ -45,6 +48,14 @@ class DesktopShell with TrayListener, WindowListener implements WindowControls {
     await trayManager.setIcon(Platform.isWindows ? 'assets/tray/tray.ico' : 'assets/tray/tray.png');
     await trayManager.setToolTip('Okul Zili');
     trayManager.addListener(this);
+    _toast = Platform.isWindows ? WindowsToastNotifier(onTap: _onToastTap) : const NoopToastNotifier();
+    await _toast.init();
+    _presenter = NoticePresenter(
+      setToolTip: trayManager.setToolTip,
+      isWindowVisible: windowManager.isVisible,
+      showInactive: () => windowManager.show(inactive: true),
+      toast: _toast,
+    );
     controller.onNotice = _onNotice;
     controller.addListener(_syncMenu);
     await _syncMenu();
@@ -59,17 +70,18 @@ class DesktopShell with TrayListener, WindowListener implements WindowControls {
 
   bool _alerting = false;
 
-  /// Sorun bildirimi: tepsi ipucu + pencere gizliyse odak çalmadan öne getirme.
+  late ToastNotifier _toast;
+  NoticePresenter? _presenter;
+
+  /// Sorun bildirimi: tepsi ipucu + pencere gizliyse toast ve odak çalmadan öne getirme.
   void _onNotice(String title, String body) {
     _alerting = true;
-    () async {
-      try {
-        await trayManager.setToolTip('Okul Zili — DİKKAT: $title');
-        if (!await windowManager.isVisible()) await windowManager.show(inactive: true);
-      } catch (e, st) {
-        ErrorLog.write('bildirim', e, st);
-      }
-    }();
+    _presenter?.present(title, body);
+  }
+
+  void _onToastTap() {
+    navigation.value = AppPage.logs;
+    showWindow();
   }
 
   void _clearTooltip() {
