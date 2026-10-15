@@ -11,10 +11,18 @@ import 'support/app_harness.dart';
 
 /// Gerçek dosya G/Ç'si ile sahte saat iç içe: gerçek zaman tanıyıp kareleri
 /// sırayla işleterek zincirleme async işin bitmesini bekler.
-Future<void> settleIo(WidgetTester tester) async {
-  for (var i = 0; i < 10; i++) {
+/// Gerçek dosya G/Ç'sinin bitmesini bekler. [until] verilirse koşul sağlanana
+/// kadar (en çok ~5 sn) bekler; yavaş CI makinelerinde sabit süre yetmeyebilir.
+Future<void> settleIo(WidgetTester tester, {bool Function()? until}) async {
+  final rounds = until == null ? 10 : 100;
+  for (var i = 0; i < rounds; i++) {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await tester.pump(const Duration(milliseconds: 50));
+    if (until != null && until()) {
+      // Bildirim çubuğu gibi giriş animasyonları bitsin; ardından dokunulabilir.
+      await tester.pump(const Duration(milliseconds: 500));
+      return;
+    }
   }
 }
 
@@ -60,13 +68,12 @@ void main() {
     expect(c.config.schoolName, before);
 
     await tester.tap(find.text('Yükle'));
-    await settleIo(tester);
-    await settleIo(tester);
+    await settleIo(tester, until: () => find.text('Ayarlar yüklendi').evaluate().isNotEmpty);
     expect(c.config.schoolName, 'Yeni Okul');
     expect(find.text('Ayarlar yüklendi'), findsOneWidget);
 
     await tester.tap(find.text('Geri al'));
-    await settleIo(tester);
+    await settleIo(tester, until: () => c.config.schoolName == before);
     expect(c.config.schoolName, before);
   });
 
@@ -98,7 +105,7 @@ void main() {
     await tester.ensureVisible(find.text('Dışa aktar…'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dışa aktar…'));
-    await settleIo(tester);
+    await settleIo(tester, until: () => find.text('Ayarlar dışa aktarıldı').evaluate().isNotEmpty);
     expect(File(out).existsSync(), isTrue);
     expect(find.text('Ayarlar dışa aktarıldı'), findsOneWidget);
   });
@@ -132,7 +139,7 @@ void main() {
     await tapVisible(tester, find.text('Geri yükle').first);
     expect(find.text('Okul adı: Yeni Yedek Okulu'), findsOneWidget);
     await tester.tap(find.text('Yükle'));
-    await settleIo(tester);
+    await settleIo(tester, until: () => c.config.schoolName == 'Yeni Yedek Okulu');
     expect(c.config.schoolName, 'Yeni Yedek Okulu');
   });
 
@@ -155,7 +162,7 @@ void main() {
     final (c, _) = await pumpOkulZili(tester, now: now, page: AppPage.settings, pickConfigFile: () async => f.path);
     await tapVisible(tester, find.text('İçe aktar…'));
     await tester.tap(find.text('Yükle'));
-    await settleIo(tester);
+    await settleIo(tester, until: () => find.textContaining('Kayıp Zil').evaluate().isNotEmpty);
     expect(c.config.schoolName, 'Sesli Okul');
     expect(find.textContaining('Kayıp Zil'), findsOneWidget);
     expect(find.textContaining('klasik zil çalar'), findsOneWidget);
@@ -167,7 +174,7 @@ void main() {
     await tester.ensureVisible(find.text('Dışa aktar…'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dışa aktar…'));
-    await settleIo(tester);
+    await settleIo(tester, until: () => find.textContaining('yazılamadı').evaluate().isNotEmpty);
     expect(find.text('Dışa aktarılamadı'), findsOneWidget);
     expect(find.textContaining('yazılamadı'), findsOneWidget);
   });

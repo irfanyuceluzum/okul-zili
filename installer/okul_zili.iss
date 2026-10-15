@@ -5,7 +5,7 @@
 ; GitHub Actions'ta derlenir: .github/workflows/windows.yml
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.0"
+  #define MyAppVersion "0.5.0"
 #endif
 #define MyAppName "Okul Zili"
 #define MyAppExe "okul_zili.exe"

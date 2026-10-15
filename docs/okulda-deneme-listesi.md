@@ -1,4 +1,4 @@
-# Okul bilgisayarında elle deneme listesi (sürüm 1.1.0)
+# Okul bilgisayarında elle deneme listesi (sürüm 0.5.0)
 
 Bu maddeler yalnız Windows'ta denenebilir; Mac'teki otomatik testler bunları
 kapsamaz. Her maddenin yanına ✔ ya da sorunu yazın. Sorun çıkarsa
@@ -6,7 +6,7 @@ kapsamaz. Her maddenin yanına ✔ ya da sorunu yazın. Sorun çıkarsa
 `hata_kayitlari.log` dosyasını saklayın.
 
 Kurulum dosyası: GitHub → Actions → "Windows kurulum dosyası" → son başarılı
-çalışma → **OkulZili-Kurulum** (içinde `OkulZili-Kurulum-1.1.0.exe`).
+çalışma → **OkulZili-Kurulum** (içinde `OkulZili-Kurulum-0.5.0.exe`).
 
 ## 1. Kurulum ve güncelleme
 - [ ] Önceki sürüm kuruluyken yeni kurulum dosyası açılınca çalışan Okul Zili kendiliğinden kapanıyor, kurulum hatasız bitiyor.
