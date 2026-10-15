@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../app_controller.dart';
 import '../../data/config_repository.dart';
 import '../../data/models/app_config.dart';
+import '../../ui/lock_dialog.dart';
 import '../../ui/navigation.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
@@ -50,6 +51,13 @@ class _SettingsPageState extends State<SettingsPage> {
     _nameFocus.dispose();
     _schoolName.dispose();
     super.dispose();
+  }
+
+  /// Kilit etkin ve oturum kilitliyse önce şifre sorulur; sonra onaylı kapatma.
+  Future<void> _quit() async {
+    if (!await ensureUnlocked(context, widget.controller)) return;
+    if (!mounted) return;
+    await widget.windowControls.requestQuit();
   }
 
   Future<void> _saveSchoolName({bool quiet = false}) async {
@@ -316,6 +324,40 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 24),
                 SectionCard(
+                  title: 'Şifre kilidi',
+                  subtitle: 'Kilitliyken zil çalma, susturma, acil durum ve pano serbesttir; ayarlar korunur. '
+                      'Şifre unutulursa kurtarma koduyla açılır.',
+                  child: c.isLockEnabled
+                      ? Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                              onPressed: () => setPasswordFlow(context, c),
+                              icon: const Icon(Icons.key),
+                              label: const Text('Şifreyi değiştir'),
+                            ),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                              onPressed: () => removeLockFlow(context, c),
+                              icon: const Icon(Icons.lock_open),
+                              label: const Text('Kilidi kaldır'),
+                            ),
+                          ],
+                        )
+                      : Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                            onPressed: () => setPasswordFlow(context, c),
+                            icon: const Icon(Icons.lock_outline),
+                            label: const Text('Şifre belirle'),
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 24),
+                SectionCard(
                   title: 'Yedekler ve taşıma',
                   subtitle: 'Ayarlar kaydedildikçe otomatik yedek alınır. '
                       'Başka bir okula taşımak için ayarları dışa aktarın.',
@@ -354,7 +396,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
                     style: TextButton.styleFrom(foregroundColor: AppColors.dangerText),
-                    onPressed: widget.windowControls.requestQuit,
+                    onPressed: _quit,
                     icon: const Icon(Icons.power_settings_new),
                     label: const Text('Uygulamayı tamamen kapat'),
                   ),

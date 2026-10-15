@@ -10,10 +10,11 @@ import '../features/pano/pano_page.dart';
 import '../features/schedule/schedule_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/sounds/sounds_page.dart';
+import 'lock_dialog.dart';
 import 'navigation.dart';
 import 'theme.dart';
 
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
     required this.controller,
@@ -24,6 +25,73 @@ class AppShell extends StatelessWidget {
   final AppController controller;
   final ValueNotifier<AppPage> navigation;
   final WindowControls windowControls;
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  AppController get controller => widget.controller;
+  ValueNotifier<AppPage> get navigation => widget.navigation;
+  WindowControls get windowControls => widget.windowControls;
+
+  bool _snackQueued = false;
+
+  @override
+  void initState() {
+    super.initState();
+    controller.addListener(_onController);
+    navigation.addListener(_onNavigation);
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_onController);
+    navigation.removeListener(_onNavigation);
+    super.dispose();
+  }
+
+  /// Pano modu açılınca oturum kilitlenir (kilit yoksa etkisizdir).
+  void _onNavigation() {
+    if (navigation.value == AppPage.pano) controller.lock();
+  }
+
+  /// Reddedilen ayar değişikliği bildirilir.
+  void _onController() {
+    if (!controller.lockRefused || _snackQueued) return;
+    _snackQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _snackQueued = false;
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Ayarlar kilitli; değişiklik kaydedilmedi.')),
+      );
+      controller.clearLockRefused();
+    });
+  }
+
+  /// Kilit koruyan sayfalar; Ana ekran, Kayıtlar ve Pano her zaman serbesttir.
+  static const _gated = {
+    AppPage.program,
+    AppPage.calendar,
+    AppPage.events,
+    AppPage.sounds,
+    AppPage.notices,
+    AppPage.settings,
+  };
+
+  Future<void> _go(AppPage page) async {
+    if (_gated.contains(page) && controller.isLockEnabled && controller.isLocked) {
+      if (!await askUnlock(context, controller)) return;
+      if (!mounted) return;
+    }
+    navigation.value = page;
+  }
+
+  void _lockNow() {
+    controller.lock();
+    navigation.value = AppPage.home;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +112,9 @@ class AppShell extends StatelessWidget {
               _Sidebar(
                 controller: controller,
                 current: page,
-                onSelect: (p) => navigation.value = p,
+                gated: _gated,
+                onSelect: _go,
+                onLock: _lockNow,
               ),
               Expanded(child: _page(page)),
             ],
@@ -55,7 +125,7 @@ class AppShell extends StatelessWidget {
   }
 
   Widget _page(AppPage page) => switch (page) {
-        AppPage.home => DashboardPage(controller: controller, onNavigate: (p) => navigation.value = p),
+        AppPage.home => DashboardPage(controller: controller, onNavigate: _go),
         AppPage.program => SchedulePage(controller: controller),
         AppPage.calendar => CalendarPage(controller: controller),
         AppPage.events => EventsPage(controller: controller),
@@ -68,11 +138,19 @@ class AppShell extends StatelessWidget {
 }
 
 class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.controller, required this.current, required this.onSelect});
+  const _Sidebar({
+    required this.controller,
+    required this.current,
+    required this.gated,
+    required this.onSelect,
+    required this.onLock,
+  });
 
   final AppController controller;
   final AppPage current;
+  final Set<AppPage> gated;
   final ValueChanged<AppPage> onSelect;
+  final VoidCallback onLock;
 
   static const _mainPages = [
     AppPage.home,
@@ -92,6 +170,7 @@ class _Sidebar extends StatelessWidget {
     // Dar pencerede yalnızca simgeler görünür.
     final compact = MediaQuery.sizeOf(context).width < 1180;
     final unsavedSchedule = controller.scheduleDraft?.dirty ?? false;
+    final locked = controller.isLockEnabled && controller.isLocked;
     return Container(
       width: compact ? 80 : 240,
       decoration: const BoxDecoration(
@@ -140,11 +219,24 @@ class _Sidebar extends StatelessWidget {
               selected: page == current,
               compact: compact,
               badge: page == AppPage.program && unsavedSchedule,
+              locked: locked && gated.contains(page),
               onTap: () => onSelect(page),
             ),
             const SizedBox(height: 4),
           ],
           const Spacer(),
+          if (controller.isLockEnabled && !locked) ...[
+            _NavItem(
+              page: AppPage.home,
+              selected: false,
+              compact: compact,
+              outlined: true,
+              label: 'Kilitle',
+              icon: Icons.lock_outline,
+              onTap: onLock,
+            ),
+            const SizedBox(height: 4),
+          ],
           _NavItem(
             page: AppPage.pano,
             selected: false,
@@ -167,7 +259,9 @@ class _NavItem extends StatelessWidget {
     required this.onTap,
     this.outlined = false,
     this.badge = false,
+    this.locked = false,
     this.label,
+    this.icon,
   });
 
   final AppPage page;
@@ -177,14 +271,18 @@ class _NavItem extends StatelessWidget {
 
   /// Kaydedilmemiş değişiklik işareti.
   final bool badge;
+
+  /// Şifre kilidi yüzünden önce şifre sorulacak.
+  final bool locked;
   final String? label;
+  final IconData? icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final fg = selected ? AppColors.lessonText : (outlined ? AppColors.ink : AppColors.inkSecondary);
     final text = label ?? page.label;
-    final semanticText = badge ? '$text (kaydedilmedi)' : text;
+    final semanticText = locked ? '$text (kilitli)' : (badge ? '$text (kaydedilmedi)' : text);
     final item = Material(
       color: selected ? AppColors.lessonTint : Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -202,10 +300,10 @@ class _NavItem extends StatelessWidget {
               mainAxisAlignment: compact ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
                 Badge(
-                  isLabelVisible: badge,
+                  isLabelVisible: badge && !locked,
                   smallSize: 9,
                   backgroundColor: AppColors.lunch,
-                  child: Icon(selected ? page.selectedIcon : page.icon, size: 20, color: fg),
+                  child: Icon(icon ?? (selected ? page.selectedIcon : page.icon), size: 20, color: fg),
                 ),
                 if (!compact) ...[
                   const SizedBox(width: 12),
@@ -217,6 +315,10 @@ class _NavItem extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (locked) ...[
+                  if (!compact) const SizedBox(width: 6),
+                  Icon(Icons.lock, size: compact ? 12 : 15, color: AppColors.inkSecondary),
+                ],
               ],
             ),
           ),
@@ -226,7 +328,7 @@ class _NavItem extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      label: compact || badge ? semanticText : null,
+      label: compact || badge || locked ? semanticText : null,
       child: compact ? Tooltip(message: semanticText, child: item) : item,
     );
   }

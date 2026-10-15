@@ -5,6 +5,7 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../app_controller.dart';
+import '../ui/lock_dialog.dart';
 import '../ui/navigation.dart';
 
 /// Pencere ve sistem tepsisi. Pencerenin çarpısı uygulamayı kapatmaz,
@@ -61,6 +62,9 @@ class DesktopShell with TrayListener, WindowListener implements WindowControls {
     await showWindow();
     final context = navigatorKey.currentContext;
     if (context == null || !context.mounted) return;
+    // Şifre kilidi varsa ve oturum kilitliyse önce şifre sorulur.
+    if (!await ensureUnlocked(context, controller)) return;
+    if (!context.mounted) return;
     if (!await confirmQuit(context)) return;
     _quitting = true;
     controller.removeListener(_syncMenu);
@@ -91,6 +95,7 @@ class DesktopShell with TrayListener, WindowListener implements WindowControls {
   @override
   void onWindowClose() {
     if (_quitting) return;
+    controller.lock();
     windowManager.hide();
   }
 
