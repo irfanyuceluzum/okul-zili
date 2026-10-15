@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
 import 'core/clock_time.dart';
 import 'core/date_utils.dart';
+import 'core/password_hash.dart';
 import 'core/scheduler/bell_log.dart';
 import 'core/scheduler/bell_scheduler.dart';
 import 'core/scheduler/day_schedule.dart';
@@ -12,6 +14,7 @@ import 'data/config_repository.dart';
 import 'data/models/app_config.dart';
 import 'data/models/bell_event.dart';
 import 'data/models/calendar.dart';
+import 'data/models/lock_settings.dart';
 import 'data/models/notices.dart';
 import 'data/schedule_draft.dart';
 import 'platform/audio_file_picker.dart';
@@ -32,11 +35,13 @@ class AppController extends ChangeNotifier {
     AudioFilePicker? pickAudioFile,
     ConfigFilePicker? pickConfigFile,
     ExportPathPicker? pickExportPath,
+    PasswordHasher? passwordHasher,
   })  : _config = config,
         pickAudioFile = pickAudioFile ?? pickAudioFileWithDialog,
         pickConfigFile = pickConfigFile ?? pickConfigFileWithDialog,
         pickExportPath = pickExportPath ?? pickExportPathWithDialog,
         system = system ?? const NoopSystemServices(),
+        _hasher = passwordHasher ?? const IsolatePasswordHasher(),
         _now = now ?? DateTime.now {
     _scheduler = BellScheduler(
       resolveDay: (date) => resolver.resolve(date),
@@ -68,6 +73,7 @@ class AppController extends ChangeNotifier {
   final BellPlayer player;
   final SystemServices system;
   final DateTime Function() _now;
+  final PasswordHasher _hasher;
   late final BellScheduler _scheduler;
   Timer? _volumeTimer;
 
@@ -186,7 +192,19 @@ class AppController extends ChangeNotifier {
 
   /// Ayarı hemen geçerli kılar ve diske kaydeder; kaydedilemezse false
   /// döner ve uyarı bandında gösterilir (ayar bellekte geçerli kalır).
+  /// Şifre kilidi açık ve kilitliyse hiçbir şey değişmeden false döner
+  /// ([lockRefused] işaretlenir, [lastError] dolmaz).
   Future<bool> updateConfig(AppConfig config) async {
+    if (isLockEnabled && isLocked) {
+      _refuseLocked();
+      return false;
+    }
+    return _applyConfig(config);
+  }
+
+  /// Kilit denetimi yapmadan ayarı uygular ve kaydeder (iç yol).
+  Future<bool> _applyConfig(AppConfig config) async {
+    if (config.lock != null) _unlockedAt = _now(); // açık oturum etkinliği
     _config = config;
     _scheduler
       ..tolerance = Duration(seconds: config.lateToleranceSeconds)
@@ -203,6 +221,106 @@ class AppController extends ChangeNotifier {
     }
     notifyListeners();
     return saved;
+  }
+
+  // ---- Şifre kilidi ----------------------------------------------------------
+
+  /// Kilit açıkken oturumun açık kalma süresi (son açılıştan / son başarılı kayıttan).
+  static const lockTimeout = Duration(minutes: 15);
+
+  static const lockedMessage = 'Ayarlar kilitli. Değiştirmek için önce şifreyle kilidi açın.';
+
+  DateTime? _unlockedAt;
+
+  /// Reddedilen ayar değişikliği oldu mu (arayüz kilit penceresini açsın).
+  bool lockRefused = false;
+
+  /// Şifre belirlenmiş mi.
+  bool get isLockEnabled => _config.lock != null;
+
+  /// Kilit açıkken: hiç açılmadıysa ya da son açılıştan [lockTimeout] geçtiyse true.
+  /// Zamanlayıcı yok; saat sorgulandıkça hesaplanır.
+  bool get isLocked {
+    if (!isLockEnabled) return false;
+    final at = _unlockedAt;
+    return at == null || _now().difference(at) >= lockTimeout;
+  }
+
+  /// Oturumu hemen kapatır (kilit yoksa etkisizdir).
+  void lock() {
+    _unlockedAt = null;
+    notifyListeners();
+  }
+
+  void clearLockRefused() {
+    if (!lockRefused) return;
+    lockRefused = false;
+    notifyListeners();
+  }
+
+  void _refuseLocked() {
+    lockRefused = true;
+    notifyListeners();
+  }
+
+  static String _normalizeRecovery(String s) => s.replaceAll(RegExp(r'[\s-]'), '');
+
+  /// [secret] parola ya da kurtarma koduysa true.
+  Future<bool> _verifySecret(String secret, LockSettings lock) async {
+    if (await _hasher.verify(secret, lock.password)) return true;
+    final code = _normalizeRecovery(secret);
+    return code.length == 8 && await _hasher.verify(code, lock.recovery);
+  }
+
+  /// Parola ya da kurtarma koduyla kilidi açar.
+  Future<bool> unlock(String secret) async {
+    final lock = _config.lock;
+    if (lock == null) return true;
+    if (!await _verifySecret(secret, lock)) return false;
+    _unlockedAt = _now();
+    lockRefused = false;
+    notifyListeners();
+    return true;
+  }
+
+  /// Parolayı belirler/değiştirir ve bir kez gösterilecek yeni kurtarma kodunu
+  /// ("1234-5678") döndürür; kod hiçbir yere düz kaydedilmez. Kilit varsa
+  /// [current] (parola ya da kurtarma kodu) doğru olmalı, yoksa [StateError];
+  /// 4 karakterden kısa parolada [ArgumentError] fırlar. Sonrasında oturum açıktır.
+  Future<String> setPassword({String? current, required String newPassword, String? hint}) async {
+    final existing = _config.lock;
+    if (existing != null) {
+      if (current == null || !await _verifySecret(current, existing)) {
+        throw StateError('Mevcut parola ya da kurtarma kodu yanlış');
+      }
+    }
+    if (newPassword.length < 4) throw ArgumentError('Parola en az 4 karakter olmalı');
+    final rnd = Random.secure();
+    final digits = List.generate(8, (_) => rnd.nextInt(10)).join();
+    final password = await _hasher.create(newPassword);
+    final recovery = await _hasher.create(digits);
+    final trimmedHint = hint?.trim();
+    final lock = LockSettings(
+      password: password,
+      hint: trimmedHint == null || trimmedHint.isEmpty ? null : trimmedHint,
+      recovery: recovery,
+    );
+    lockRefused = false;
+    await _applyConfig(_config.copyWith(lock: () => lock));
+    _unlockedAt = _now();
+    notifyListeners();
+    return '${digits.substring(0, 4)}-${digits.substring(4)}';
+  }
+
+  /// Parola ya da kurtarma kodu doğruysa kilidi tamamen kaldırır.
+  Future<bool> removeLock(String secretOrRecovery) async {
+    final lock = _config.lock;
+    if (lock == null) return true;
+    if (!await _verifySecret(secretOrRecovery, lock)) return false;
+    _unlockedAt = null;
+    lockRefused = false;
+    await _applyConfig(_config.copyWith(lock: () => null));
+    return true;
   }
 
   Future<void> refreshAutostart() async {
@@ -254,6 +372,10 @@ class AppController extends ChangeNotifier {
   Future<List<String>> saveScheduleDraft() async {
     final draft = _scheduleDraft;
     if (draft == null) return const [];
+    if (isLockEnabled && isLocked) {
+      _refuseLocked();
+      return const [lockedMessage]; // taslak korunur
+    }
     final errors = draft.validate(_config.overrides);
     if (errors.isNotEmpty) return errors;
     _scheduleDraft = null;
@@ -292,6 +414,10 @@ class AppController extends ChangeNotifier {
   /// Dosya okunamazsa hiçbir şey değişmez. Okunursa önce mevcut ayar yedeklenir,
   /// kaydedilmemiş program taslağı atılır, sonra yeni ayar uygulanır.
   Future<ReplaceResult> _replaceFrom(File source) async {
+    if (isLockEnabled && isLocked) {
+      _refuseLocked();
+      return const ReplaceResult(ok: false, error: lockedMessage);
+    }
     final AppConfig loaded;
     final List<String> warnings;
     try {
@@ -334,6 +460,10 @@ class AppController extends ChangeNotifier {
 
   /// Son geri yükleme/içe aktarma öncesi ayarı geri getirir (bir kez).
   Future<bool> undoReplace() async {
+    if (isLockEnabled && isLocked) {
+      _refuseLocked();
+      return false;
+    }
     final previous = _configBeforeReplace;
     if (previous == null) return false;
     _configBeforeReplace = null;

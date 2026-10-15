@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:okul_zili/app_controller.dart';
+import 'package:okul_zili/core/password_hash.dart';
 import 'package:okul_zili/data/config_repository.dart';
 import 'package:okul_zili/data/default_config.dart';
 import 'package:okul_zili/data/models/app_config.dart';
@@ -19,6 +20,17 @@ class SilentPlayer implements BellPlayer {
 
   @override
   Future<void> stop() async {}
+}
+
+/// Testlerde isolate'sız, 1000 iterasyonlu hızlı parola hesabı.
+class FastPasswordHasher implements PasswordHasher {
+  const FastPasswordHasher();
+
+  @override
+  Future<PasswordRecord> create(String secret) async => PasswordHash.create(secret, iterations: 1000);
+
+  @override
+  Future<bool> verify(String secret, PasswordRecord record) async => PasswordHash.verify(secret, record);
 }
 
 /// Hangi sesin, döngüde mi çalındığını ve kaç kez durdurulduğunu kaydeder.
@@ -61,6 +73,7 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
   AudioFilePicker? pickAudioFile,
   ConfigFilePicker? pickConfigFile,
   ExportPathPicker? pickExportPath,
+  PasswordHasher? passwordHasher,
 
   /// Verilirse [now] yerine bu saat kullanılır (testte ileri sarmak için).
   DateTime Function()? clock,
@@ -85,6 +98,7 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
     pickAudioFile: pickAudioFile,
     pickConfigFile: pickConfigFile,
     pickExportPath: pickExportPath,
+    passwordHasher: passwordHasher ?? const FastPasswordHasher(),
   );
   final navigation = ValueNotifier(page);
   await tester.pumpWidget(OkulZiliApp(

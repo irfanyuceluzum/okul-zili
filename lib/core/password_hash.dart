@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -90,4 +91,25 @@ class PasswordHash {
     }
     return diff == 0;
   }
+}
+
+/// Parola özeti hesabı; arayüzü dondurmamak için yavaş işi dışarı alan bir
+/// arayüz. Testlerde hızlı sahtesi verilir.
+abstract interface class PasswordHasher {
+  Future<PasswordRecord> create(String secret);
+  Future<bool> verify(String secret, PasswordRecord record);
+}
+
+/// PBKDF2'yi ayrı bir isolate'ta (120000 iterasyon) çalıştırır.
+class IsolatePasswordHasher implements PasswordHasher {
+  const IsolatePasswordHasher();
+
+  static const iterations = 120000;
+
+  @override
+  Future<PasswordRecord> create(String secret) =>
+      Isolate.run(() => PasswordHash.create(secret, iterations: iterations));
+
+  @override
+  Future<bool> verify(String secret, PasswordRecord record) => Isolate.run(() => PasswordHash.verify(secret, record));
 }
