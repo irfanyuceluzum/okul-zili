@@ -96,4 +96,69 @@ void main() {
     await controller.importConfigFile(f.path);
     expect(controller.scheduleDraft, isNull);
   });
+
+  /// Kendi klasöründe, şifresi 'gizli1' olan (oturumu açık) bir denetleyici.
+  Future<AppController> lockedController(String dir) async {
+    final d = Directory('${tmp.path}$sep$dir')..createSync();
+    final r = ConfigRepository(File('${d.path}${sep}config.json'));
+    final cfg = createDefaultConfig().copyWith(schoolName: 'Kilitli Okul');
+    await r.save(cfg);
+    final lc = AppController(
+        config: cfg, repository: r, player: SilentPlayer(), passwordHasher: const FastPasswordHasher());
+    await lc.setPassword(newPassword: 'gizli1');
+    addTearDown(lc.dispose);
+    return lc;
+  }
+
+  test('kilitli denetleyicide kilitsiz yedek yüklenince kilit korunur, eski parola çalışır', () async {
+    final lc = await lockedController('a');
+    final f = await writeConfig('kilitsiz.json', createDefaultConfig().copyWith(schoolName: 'Yedek Okul'));
+    final r = await lc.restoreBackup(BackupInfo(f, 'x'));
+    expect(r.ok, isTrue);
+    expect(lc.config.schoolName, 'Yedek Okul');
+    expect(lc.isLockEnabled, isTrue);
+    expect(lc.isLocked, isFalse);
+    lc.lock();
+    expect(await lc.unlock('gizli1'), isTrue);
+  });
+
+  test('kilitsiz denetleyicide kilitli dosya içe aktarılınca kilit gelmez', () async {
+    final lc = await lockedController('b');
+    final f = await writeConfig('kilitli.json', lc.config.copyWith(schoolName: 'Dosya Okulu'));
+    expect(repo.readConfigFile(f).$1.lock, isNotNull);
+    final r = await controller.importConfigFile(f.path);
+    expect(r.ok, isTrue);
+    expect(controller.config.schoolName, 'Dosya Okulu');
+    expect(controller.isLockEnabled, isFalse);
+    expect(repo.readConfigFile(repo.file).$1.lock, isNull);
+  });
+
+  test('undoReplace kilidi değiştirmez', () async {
+    final lc = await lockedController('c');
+    final lockBefore = lc.config.lock;
+    final f = await writeConfig('y.json', createDefaultConfig().copyWith(schoolName: 'Yeni'));
+    await lc.importConfigFile(f.path);
+    expect(await lc.undoReplace(), isTrue);
+    expect(lc.config.schoolName, 'Kilitli Okul');
+    expect(lc.isLockEnabled, isTrue);
+    expect(identical(lc.config.lock, lockBefore), isTrue);
+
+    // Kilitsiz bilgisayarda: içe aktarılan dosyadaki kilit geri almada da gelmez.
+    final withLock = await writeConfig('k.json', lc.config);
+    await controller.importConfigFile(withLock.path);
+    expect(await controller.undoReplace(), isTrue);
+    expect(controller.isLockEnabled, isFalse);
+  });
+
+  test('dışa aktarma: uzantı yoksa .json eklenir, .JSON aynen kalır', () async {
+    expect(await controller.exportConfig('${tmp.path}${sep}ayarlar'), isNull);
+    final written = File('${tmp.path}${sep}ayarlar.json');
+    expect(written.existsSync(), isTrue);
+    expect(repo.readConfigFile(written).$1.schoolName, 'Mevcut Okul');
+    expect(File('${tmp.path}${sep}ayarlar').existsSync(), isFalse);
+
+    expect(await controller.exportConfig('${tmp.path}${sep}BUYUK.JSON'), isNull);
+    expect(File('${tmp.path}${sep}BUYUK.JSON').existsSync(), isTrue);
+    expect(File('${tmp.path}${sep}BUYUK.JSON.json').existsSync(), isFalse);
+  });
 }

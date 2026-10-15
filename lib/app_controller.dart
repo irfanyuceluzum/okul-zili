@@ -507,7 +507,7 @@ class AppController extends ChangeNotifier {
     }
 
     _configBeforeReplace = before;
-    final saved = await updateConfig(loaded.copyWith(sounds: sounds));
+    final saved = await updateConfig(loaded.copyWith(lock: () => _config.lock, sounds: sounds));
     if (!saved) {
       warnings.add('Yeni ayar diske kaydedilemedi; uygulama yeniden açılınca eski ayara dönebilir.');
     }
@@ -524,12 +524,15 @@ class AppController extends ChangeNotifier {
     if (previous == null) return false;
     _configBeforeReplace = null;
     _scheduleDraft = null;
-    await updateConfig(previous);
+    // Şifre kilidi bu bilgisayara ait; geri alırken mevcut kilit korunur.
+    await updateConfig(previous.copyWith(lock: () => _config.lock));
     return true;
   }
 
   /// Ayarları [path] dosyasına yazar; hata varsa metni, başarıda null döner.
   Future<String?> exportConfig(String path) async {
+    // Uzantı yoksa .json eklenir (büyük/küçük harf duyarsız).
+    if (!path.toLowerCase().endsWith('.json')) path = '$path.json';
     try {
       await File(path).writeAsString(repository.exportJson(_config), flush: true);
       return null;

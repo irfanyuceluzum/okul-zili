@@ -166,6 +166,10 @@ class _SettingsPageState extends State<SettingsPage> {
             Text('Zil sesi: ${loaded.sounds.length}'),
             const SizedBox(height: 12),
             const Text('Mevcut ayarlar önce yedeklenecek.'),
+            if (c.isLockEnabled)
+              const Text('Şifre kilidi değişmeyecek.')
+            else if (loaded.lock != null)
+              const Text('Dosyadaki şifre kilidi alınmayacak.'),
           ],
         ),
         actions: [

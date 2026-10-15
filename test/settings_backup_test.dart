@@ -70,6 +70,17 @@ void main() {
     expect(c.config.schoolName, before);
   });
 
+  testWidgets('özet diyaloğu: kilit etkinse "Şifre kilidi değişmeyecek." satırı', (tester) async {
+    final good = validFile('yeni2.json', 'Yeni Okul');
+    final (c, _) = await pumpOkulZili(tester,
+        now: now, page: AppPage.settings, pickConfigFile: () async => good.path);
+    final done = c.setPassword(newPassword: 'gizli1');
+    await settleIo(tester);
+    await done;
+    await tapVisible(tester, find.text('İçe aktar…'));
+    expect(find.text('Şifre kilidi değişmeyecek.'), findsOneWidget);
+  });
+
   testWidgets('vazgeçilen seçici hiçbir şey yapmaz', (tester) async {
     final (c, _) = await pumpOkulZili(tester,
         now: now, page: AppPage.settings, pickConfigFile: () async => null, pickExportPath: () async => null);
