@@ -36,7 +36,7 @@ jobs:
           & $iscc "/DMyAppVersion=$version" installer\okul_zili.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: OkulZili-Kurulum
           path: build/installer/*.exe
