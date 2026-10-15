@@ -69,6 +69,8 @@ flutter:
   assets:
     - assets/sounds/
     - assets/tray/
+    - assets/fonts/OFL.txt
+    - LICENSE
 
   fonts:
     - family: IBM Plex Sans

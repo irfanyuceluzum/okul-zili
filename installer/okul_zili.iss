@@ -1,4 +1,4 @@
-; Okul Zili - Windows kurulum betiği (Inno Setup 6)
+﻿; Okul Zili - Windows kurulum betiği (Inno Setup 6)
 ;
 ; Kullanıcı başına kurulur (yönetici izni gerekmez); böylece "açılışta başlat"
 ; kaydı, uygulamayı kullanacak Windows kullanıcısına yazılır.
@@ -8,6 +8,8 @@
   #define MyAppVersion "0.5.0"
 #endif
 #define MyAppName "Okul Zili"
+#define MyAppDeveloper "İrfan Yücel ÜZÜM"
+#define MyAppURL "https://github.com/irfanyuceluzum/okul-zili"
 #define MyAppExe "okul_zili.exe"
 #define BuildDir "..\build\windows\x64\runner\Release"
 
@@ -15,7 +17,11 @@
 AppId={{6E0F3B52-7A41-4C7B-9C55-0B6E2D3F1A10}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppPublisher={#MyAppName}
+AppPublisher={#MyAppDeveloper}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}/releases
+AppCopyright=Copyright (C) 2026 {#MyAppDeveloper}. GPL-3.0
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes

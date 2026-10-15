@@ -14,6 +14,7 @@ import 'platform/bell_player.dart';
 import 'platform/desktop_shell.dart';
 import 'platform/error_log.dart';
 import 'platform/system_services.dart';
+import 'ui/about_dialog.dart';
 import 'ui/app_shell.dart';
 import 'ui/navigation.dart';
 import 'ui/theme.dart';
@@ -87,6 +88,7 @@ Future<void> _start(List<String> args) async {
     }
   }
 
+  registerAppLicenses();
   runApp(OkulZiliApp(
     controller: controller,
     navigation: navigation,

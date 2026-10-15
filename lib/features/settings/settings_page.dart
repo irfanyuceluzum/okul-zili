@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../app_controller.dart';
+import '../../core/app_info.dart';
 import '../../data/config_repository.dart';
 import '../../data/models/app_config.dart';
+import '../../ui/about_dialog.dart';
 import '../../ui/lock_dialog.dart';
 import '../../ui/navigation.dart';
 import '../../ui/theme.dart';
@@ -392,6 +394,27 @@ class _SettingsPageState extends State<SettingsPage> {
                       const Text('Yedekler', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       _backupList(c),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SectionCard(
+                  title: 'Hakkında',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('${AppInfo.name} ${AppInfo.version} · Geliştirici: ${AppInfo.developer}',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      const Text('Ücretsiz ve özgür yazılımdır; ${AppInfo.license} ile dağıtılır.',
+                          style: TextStyle(color: AppColors.inkSecondary)),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                        onPressed: () => showAboutAppDialog(context),
+                        icon: const Icon(Icons.info_outline),
+                        label: const Text('Hakkında ve lisans'),
+                      ),
                     ],
                   ),
                 ),

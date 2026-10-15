@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.okulzili" "\0"
-            VALUE "FileDescription", "okul_zili" "\0"
+            VALUE "CompanyName", "İrfan Yücel ÜZÜM" "\0"
+            VALUE "FileDescription", "Okul Zili" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "okul_zili" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.okulzili. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 İrfan Yücel ÜZÜM. GPL-3.0" "\0"
             VALUE "OriginalFilename", "okul_zili.exe" "\0"
-            VALUE "ProductName", "okul_zili" "\0"
+            VALUE "ProductName", "Okul Zili" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

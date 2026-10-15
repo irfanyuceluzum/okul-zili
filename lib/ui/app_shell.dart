@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
+import '../core/app_info.dart';
 import '../features/calendar/calendar_page.dart';
 import '../features/dashboard/dashboard_page.dart';
 import '../features/events/events_page.dart';
@@ -10,6 +11,7 @@ import '../features/pano/pano_page.dart';
 import '../features/schedule/schedule_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/sounds/sounds_page.dart';
+import 'about_dialog.dart';
 import 'lock_dialog.dart';
 import 'navigation.dart';
 import 'theme.dart';
@@ -178,75 +180,100 @@ class _Sidebar extends StatelessWidget {
         border: Border(right: BorderSide(color: AppColors.line)),
       ),
       padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 8),
-            child: Row(
-              mainAxisAlignment: compact ? MainAxisAlignment.center : MainAxisAlignment.start,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(color: AppColors.recess, borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.notifications, color: AppColors.ink),
-                ),
-                if (!compact) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Okul Zili', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                        Text(
-                          controller.config.schoolName.isEmpty ? 'Okul adı girilmedi' : controller.config.schoolName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13, color: AppColors.inkSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
+      // Kısa pencerede (ör. 640 px, kilit düğmesi de varken) menü taşmasın: sığmazsa kayar,
+      // sığarsa alt düğmeler en alta yaslanır.
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(child: _items(context, compact, unsavedSchedule, locked)),
           ),
-          const SizedBox(height: 28),
-          for (final page in _mainPages) ...[
-            _NavItem(
-              page: page,
-              selected: page == current,
-              compact: compact,
-              badge: page == AppPage.program && unsavedSchedule,
-              locked: locked && gated.contains(page),
-              onTap: () => onSelect(page),
-            ),
-            const SizedBox(height: 4),
-          ],
-          const Spacer(),
-          if (controller.isLockEnabled && !locked) ...[
-            _NavItem(
-              page: AppPage.home,
-              selected: false,
-              compact: compact,
-              outlined: true,
-              label: 'Kilitle',
-              icon: Icons.lock_outline,
-              onTap: onLock,
-            ),
-            const SizedBox(height: 4),
-          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _items(BuildContext context, bool compact, bool unsavedSchedule, bool locked) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 8),
+          child: Row(
+            mainAxisAlignment: compact ? MainAxisAlignment.center : MainAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: AppColors.recess, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.notifications, color: AppColors.ink),
+              ),
+              if (!compact) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Okul Zili', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                      Text(
+                        controller.config.schoolName.isEmpty ? 'Okul adı girilmedi' : controller.config.schoolName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: AppColors.inkSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 28),
+        for (final page in _mainPages) ...[
           _NavItem(
-            page: AppPage.pano,
+            page: page,
+            selected: page == current,
+            compact: compact,
+            badge: page == AppPage.program && unsavedSchedule,
+            locked: locked && gated.contains(page),
+            onTap: () => onSelect(page),
+          ),
+          const SizedBox(height: 4),
+        ],
+        const Spacer(),
+        if (controller.isLockEnabled && !locked) ...[
+          _NavItem(
+            page: AppPage.home,
             selected: false,
             compact: compact,
             outlined: true,
-            label: 'Pano modunu aç',
-            onTap: () => onSelect(AppPage.pano),
+            label: 'Kilitle',
+            icon: Icons.lock_outline,
+            onTap: onLock,
           ),
+          const SizedBox(height: 4),
         ],
-      ),
+        _NavItem(
+          page: AppPage.pano,
+          selected: false,
+          compact: compact,
+          outlined: true,
+          label: 'Pano modunu aç',
+          onTap: () => onSelect(AppPage.pano),
+        ),
+        const SizedBox(height: 8),
+        // Şifre kilidinden bağımsız: geliştirici ve lisans bilgisi her zaman görülebilir.
+        Tooltip(
+          message: 'Hakkında',
+          child: TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.inkSecondary, minimumSize: const Size(0, 36)),
+            onPressed: () => showAboutAppDialog(context),
+            child: compact
+                ? const Icon(Icons.info_outline, size: 20)
+                : const Text('Sürüm ${AppInfo.version} · Hakkında', style: TextStyle(fontSize: 13)),
+          ),
+        ),
+      ],
     );
   }
 }
