@@ -2,6 +2,7 @@ import '../default_config.dart';
 import 'bell_event.dart';
 import '../../core/date_utils.dart';
 import 'calendar.dart';
+import 'lock_settings.dart';
 import 'notices.dart';
 import 'schedule_template.dart';
 
@@ -52,6 +53,7 @@ class AppConfig {
     this.volumePercent = 100,
     this.lateToleranceSeconds = 60,
     this.panoIdleMinutes = 3,
+    this.lock,
   });
 
   /// Ayar dosyasını okur. Tek tek okunamayan kayıtlar (bir tatil, bir
@@ -103,6 +105,16 @@ class AppConfig {
       soundForType.putIfAbsent(e.key, () => e.value);
     }
 
+    LockSettings? lock;
+    final rawLock = json['lock'];
+    if (rawLock != null) {
+      try {
+        lock = LockSettings.fromJson(rawLock as Map<String, dynamic>);
+      } catch (_) {
+        warnings?.add('Kilit ayarı okunamadı.');
+      }
+    }
+
     final config = AppConfig(
       schoolName: json['schoolName'] is String ? json['schoolName'] as String : '',
       templates: templates,
@@ -117,6 +129,7 @@ class AppConfig {
       volumePercent: _int(json['volumePercent']) ?? 100,
       lateToleranceSeconds: _int(json['lateToleranceSeconds']) ?? 60,
       panoIdleMinutes: _int(json['panoIdleMinutes']) ?? 3,
+      lock: lock,
     );
     if (skipped.isNotEmpty) {
       warnings?.add('Okunamayan kayıtlar atlandı: ${skipped.entries.map((e) => '${e.value} ${e.key}').join(', ')}.');
@@ -156,6 +169,9 @@ class AppConfig {
   /// Bilgisayar bu kadar dakika boşta kalınca pano modu açılır; 0 ise kapalı.
   final int panoIdleMinutes;
 
+  /// Ayarlar kilidi; null ise kilit yok. Yalnız parola özetleri tutulur.
+  final LockSettings? lock;
+
   AppConfig copyWith({
     String? schoolName,
     List<ScheduleTemplate>? templates,
@@ -170,6 +186,7 @@ class AppConfig {
     int? volumePercent,
     int? lateToleranceSeconds,
     int? panoIdleMinutes,
+    LockSettings? Function()? lock,
   }) =>
       AppConfig(
         schoolName: schoolName ?? this.schoolName,
@@ -185,6 +202,7 @@ class AppConfig {
         volumePercent: volumePercent ?? this.volumePercent,
         lateToleranceSeconds: lateToleranceSeconds ?? this.lateToleranceSeconds,
         panoIdleMinutes: panoIdleMinutes ?? this.panoIdleMinutes,
+        lock: lock != null ? lock() : this.lock,
       );
 
   /// [now] gününde panoda gösterilecek duyurular: açık, süresi dolmamış, metni dolu.
@@ -232,5 +250,6 @@ class AppConfig {
         'volumePercent': volumePercent,
         'lateToleranceSeconds': lateToleranceSeconds,
         'panoIdleMinutes': panoIdleMinutes,
+        if (lock != null) 'lock': lock!.toJson(),
       };
 }
