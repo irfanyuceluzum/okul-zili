@@ -115,7 +115,62 @@ class AppController extends ChangeNotifier {
   /// Arayüzde gösterilecek son ciddi hata (ör. ayar kaydedilemedi).
   String? get lastError => _lastError;
 
+  /// Sorunlarda (zil çalınamadı, ses aygıtı, kayıt hatası...) tepsideki
+  /// uygulamanın fark edilmesi için bildirim; masaüstü kabuğu atar.
+  /// Atanmadan önce gelen bildirimler (ör. açılış uyarısı) kuyrukta bekler
+  /// ve atanınca sırayla iletilir.
+  void Function(String title, String body)? get onNotice => _onNotice;
+  set onNotice(void Function(String title, String body)? value) {
+    _onNotice = value;
+    if (value == null || _pendingNotices.isEmpty) return;
+    final pending = List.of(_pendingNotices);
+    _pendingNotices.clear();
+    for (final n in pending) {
+      _notice(n.$1, n.$2);
+    }
+  }
+
+  void Function(String title, String body)? _onNotice;
+  final List<(String, String)> _pendingNotices = [];
+
+  static const noticeRepeatWindow = Duration(minutes: 10);
+  final Map<String, DateTime> _noticeSent = {};
+
+  /// Aynı başlık+gövde [noticeRepeatWindow] içinde ikinci kez gönderilmez.
+  /// Not: ses aygıtı hatası 10 dk içinde düzelip aynı metinle yeniden bozulursa
+  /// bildirim bilerek bastırılır (tepsi ipucunu yeniden yanıp sönmekten korur).
+  /// Süzgeç anahtarı yalnız bildirim gerçekten iletildiğinde işaretlenir.
+  void _notice(String title, String body) {
+    final handler = _onNotice;
+    if (handler == null) {
+      if (_pendingNotices.length < 20 && !_pendingNotices.contains((title, body))) {
+        _pendingNotices.add((title, body));
+      }
+      return;
+    }
+    final key = '$title\n$body';
+    final now = _now();
+    final last = _noticeSent[key];
+    if (last != null && now.difference(last) < noticeRepeatWindow) return;
+    _noticeSent.removeWhere((_, t) => now.difference(t) >= noticeRepeatWindow);
+    _noticeSent[key] = now;
+    try {
+      handler(title, body);
+    } catch (e, st) {
+      ErrorLog.write('bildirim', e, st);
+    }
+  }
+
   void start() {
+    final warning = repository.lastLoadWarning;
+    if (warning != null) {
+      final title = warning.contains('tarihli yedek yüklendi')
+          ? 'Ayarlar yedekten yüklendi'
+          : warning.contains('varsayılan ayarlar')
+              ? 'Ayarlar varsayılana döndü'
+              : 'Ayar dosyası uyarısı';
+      _notice(title, warning);
+    }
     system.preventSleep();
     restoreTodayFromLog();
     _scheduler.start();
@@ -218,6 +273,7 @@ class AppController extends ChangeNotifier {
       saved = false;
       _lastError = 'Ayarlar kaydedilemedi; uygulama yeniden açılınca son değişiklikler kaybolabilir. ($e)';
       ErrorLog.write('ayar kaydı', e, st);
+      _notice('Ayarlar kaydedilemedi', 'Son değişiklikler kaybolabilir. ($e)');
     }
     notifyListeners();
     return saved;
@@ -668,11 +724,19 @@ class AppController extends ChangeNotifier {
     _refreshVolume();
   }
 
+  @visibleForTesting
+  void debugRefreshVolume() => _refreshVolume();
+
+  @visibleForTesting
+  void debugLog(BellLogEntry entry) => _onLog(entry);
+
   void _refreshVolume() {
     if (!system.controlsVolume) return;
     final v = system.readVolume();
     if (v.level != _volume.level || v.muted != _volume.muted || v.error != _volume.error) {
+      final newError = v.error != null && _volume.error == null;
       _volume = v;
+      if (newError) _notice('Ses aygıtı sorunu', v.error!);
       notifyListeners();
     }
   }
@@ -687,6 +751,13 @@ class AppController extends ChangeNotifier {
       _outcomes[key] = entry.outcome;
     }
     debugPrint('[Zil] $entry');
+    final what = '${entry.bell.time} ${entry.bell.label}';
+    final detail = entry.detail;
+    if (entry.outcome == BellOutcome.failed) {
+      _notice('Zil çalınamadı', '$what: ${detail ?? 'bilinmeyen hata'}');
+    } else if (entry.outcome == BellOutcome.missed) {
+      _notice('Zil kaçırıldı', '$what${detail == null ? '' : ' ($detail)'}');
+    }
     _appendLogFile(entry);
     notifyListeners();
   }

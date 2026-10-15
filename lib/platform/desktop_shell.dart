@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import '../app_controller.dart';
 import '../ui/lock_dialog.dart';
 import '../ui/navigation.dart';
+import 'error_log.dart';
 
 /// Pencere ve sistem tepsisi. Pencerenin çarpısı uygulamayı kapatmaz,
 /// yalnızca gizler; ziller tepside çalışmaya devam eder. Tamamen kapatmak
@@ -44,6 +45,7 @@ class DesktopShell with TrayListener, WindowListener implements WindowControls {
     await trayManager.setIcon(Platform.isWindows ? 'assets/tray/tray.ico' : 'assets/tray/tray.png');
     await trayManager.setToolTip('Okul Zili');
     trayManager.addListener(this);
+    controller.onNotice = _onNotice;
     controller.addListener(_syncMenu);
     await _syncMenu();
   }
@@ -52,6 +54,30 @@ class DesktopShell with TrayListener, WindowListener implements WindowControls {
   Future<void> showWindow() async {
     await windowManager.show();
     await windowManager.focus();
+    _clearTooltip();
+  }
+
+  bool _alerting = false;
+
+  /// Sorun bildirimi: tepsi ipucu + pencere gizliyse odak çalmadan öne getirme.
+  void _onNotice(String title, String body) {
+    _alerting = true;
+    () async {
+      try {
+        await trayManager.setToolTip('Okul Zili — DİKKAT: $title');
+        if (!await windowManager.isVisible()) await windowManager.show(inactive: true);
+      } catch (e, st) {
+        ErrorLog.write('bildirim', e, st);
+      }
+    }();
+  }
+
+  void _clearTooltip() {
+    if (!_alerting) return;
+    _alerting = false;
+    trayManager.setToolTip('Okul Zili').catchError((Object e, StackTrace st) {
+      ErrorLog.write('tepsi ipucu', e, st);
+    });
   }
 
   @override
