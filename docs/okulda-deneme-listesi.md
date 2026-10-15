@@ -5,8 +5,8 @@ kapsamaz. Her maddenin yanına ✔ ya da sorunu yazın. Sorun çıkarsa
 **Kayıtlar** sayfasının ekran görüntüsünü ve ayar klasöründeki
 `hata_kayitlari.log` dosyasını saklayın.
 
-Kurulum dosyası: GitHub → Actions → "Windows kurulum dosyası" → son başarılı
-çalışma → **OkulZili-Kurulum** (içinde `OkulZili-Kurulum-0.5.0.exe`).
+Kurulum dosyası: GitHub → Releases → **Okul Zili 0.5.0** →
+`OkulZili-Kurulum-0.5.0.exe` (https://github.com/irfanyuceluzum/okul-zili/releases/tag/v0.5.0).
 
 ## 1. Kurulum ve güncelleme
 - [ ] Önceki sürüm kuruluyken yeni kurulum dosyası açılınca çalışan Okul Zili kendiliğinden kapanıyor, kurulum hatasız bitiyor.
