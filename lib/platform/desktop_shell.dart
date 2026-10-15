@@ -49,7 +49,6 @@ class DesktopShell with TrayListener, WindowListener implements WindowControls {
     await trayManager.setToolTip('Okul Zili');
     trayManager.addListener(this);
     _toast = Platform.isWindows ? WindowsToastNotifier(onTap: _onToastTap) : const NoopToastNotifier();
-    await _toast.init();
     _presenter = NoticePresenter(
       setToolTip: trayManager.setToolTip,
       isWindowVisible: windowManager.isVisible,
@@ -59,6 +58,16 @@ class DesktopShell with TrayListener, WindowListener implements WindowControls {
     controller.onNotice = _onNotice;
     controller.addListener(_syncMenu);
     await _syncMenu();
+    // Toast en son ve beklenmeden kurulur: takılsa ya da hata verse de tepsi
+    // menüsü ve ipucu+pencere yolu çalışır; hazır olmadan gelen bildirim
+    // toast'suz gösterilir.
+    _initToast();
+  }
+
+  void _initToast() {
+    _toast.init().timeout(const Duration(seconds: 5)).catchError((Object e, StackTrace st) {
+      ErrorLog.write('bildirim başlatma', e, st);
+    });
   }
 
   @override

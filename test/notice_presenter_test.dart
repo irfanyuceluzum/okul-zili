@@ -1,6 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:okul_zili/platform/notice_presenter.dart';
 import 'package:okul_zili/platform/notifier.dart';
+
+/// Hiç tamamlanmayan toast (takılan bildirim servisi).
+class _HangingToast implements ToastNotifier {
+  @override
+  Future<void> init() => Completer<void>().future;
+
+  @override
+  Future<void> show(String title, String body) => Completer<void>().future;
+}
 
 class _FakeToast implements ToastNotifier {
   _FakeToast({this.fail = false});
@@ -51,6 +62,21 @@ void main() {
   test('toast fırlatırsa ipucu ve showInactive yine çağrılır', () async {
     final toast = _FakeToast(fail: true);
     await make(toast, visible: false).present('Ses', 'ayrıntı');
+    expect(tips, hasLength(1));
+    expect(inactiveCalls, 1);
+  });
+
+  test('toast takılırsa süre dolunca pencere yine öne gelir', () async {
+    tips = [];
+    inactiveCalls = 0;
+    final presenter = NoticePresenter(
+      setToolTip: (t) async => tips.add(t),
+      isWindowVisible: () async => false,
+      showInactive: () async => inactiveCalls++,
+      toast: _HangingToast(),
+      toastTimeout: const Duration(milliseconds: 50),
+    );
+    await presenter.present('Ses', 'ayrıntı').timeout(const Duration(seconds: 2));
     expect(tips, hasLength(1));
     expect(inactiveCalls, 1);
   });

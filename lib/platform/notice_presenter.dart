@@ -10,12 +10,16 @@ class NoticePresenter {
     required this.isWindowVisible,
     required this.showInactive,
     required this.toast,
+    this.toastTimeout = const Duration(seconds: 5),
   });
 
   final Future<void> Function(String) setToolTip;
   final Future<bool> Function() isWindowVisible;
   final Future<void> Function() showInactive;
   final ToastNotifier toast;
+
+  /// Toast takılırsa en fazla bu kadar beklenir; ardından pencere öne gelir.
+  final Duration toastTimeout;
 
   Future<void> present(String title, String body) async {
     try {
@@ -31,7 +35,7 @@ class NoticePresenter {
     }
     if (visible) return;
     try {
-      await toast.show(title, body);
+      await toast.show(title, body).timeout(toastTimeout);
     } catch (e, st) {
       ErrorLog.write('bildirim toast', e, st);
     }
