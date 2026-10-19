@@ -48,6 +48,13 @@ Kurulum dosyası: GitHub → Releases → **Okul Zili 0.6.0** →
 - [ ] 3 dk dokunulmayınca pano açılıyor (yazı alanında imleç ya da açık pencere yokken).
 - [ ] Duyuru bandı akıyor, bugünün nöbetçileri görünüyor; projeksiyon/TV çözünürlüğünde yazılar taşmıyor.
 
+## 4a. Pano: hava durumu, günün sözü, belirli günler
+- [ ] Ayarlar → Pano modu → Hava durumu → "Konum seç…" ile okulun ilçesi bulundu ve seçildi.
+- [ ] Panoda tarihin yanında sıcaklık ve durum görünüyor; internet kesilince bilgi saatiyle kalıyor, bağlantı gelince güncelleniyor.
+- [ ] Panonun altında günün sözü görünüyor; belirli bir gün/hafta varsa "Bugün" bölümünde çıkıyor.
+- [ ] Takvim → Belirli gün ve haftalar: istenmeyen günler kapatılabiliyor; Mevlid-i Nebî Haftası tarihi girilebiliyor.
+- [ ] Pano gerçek ekranda (1366×768 ya da 1920×1080) taşmadan sığıyor.
+
 ## 5. Şifre kilidi (Ayarlar → Şifre kilidi)
 - [ ] Şifre koyunca kurtarma kodu bir kez gösteriliyor (kâğıda yazın).
 - [ ] Kilitle düğmesi ve pencereyi tepsiye gizlemek kilitliyor; ayar sayfaları şifre soruyor.

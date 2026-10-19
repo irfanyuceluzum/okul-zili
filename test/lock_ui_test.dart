@@ -107,7 +107,10 @@ void main() {
 
     await tester.enterText(field('Yeni şifre (tekrar)'), 'okul1234');
     await tester.tap(dialogSave);
-    await settle(tester);
+    // Şifre özeti ve kayıt yoğun test turunda uzun sürebilir: pencere çıkana kadar bekle.
+    for (var i = 0; i < 25 && find.text('Kurtarma kodunuz').evaluate().isEmpty; i++) {
+      await settle(tester);
+    }
     expect(find.text('Kurtarma kodunuz'), findsOneWidget);
     final code = tester
         .widgetList<SelectableText>(find.byType(SelectableText))

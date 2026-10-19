@@ -7,8 +7,12 @@ import '../../app_controller.dart';
 import '../../core/date_utils.dart';
 import '../../core/scheduler/day_schedule.dart';
 import '../../data/models/notices.dart';
+import '../../data/quotes.dart';
+import '../../data/special_days.dart';
+import '../../platform/weather.dart';
 import '../../ui/navigation.dart';
 import '../../ui/theme.dart';
+import '../../ui/weather_icons.dart';
 
 /// Koridor ekranı için tam ekran, koyu görünüm. 1920×1080 tuvalde
 /// tasarlanır ve ekrana sığacak şekilde ölçeklenir. Esc ile çıkılır.
@@ -94,6 +98,9 @@ class _PanoPageState extends State<PanoPage> {
     final announcements = c.config.activeAnnouncements(_now);
     final duties = c.config.dutiesOn(_now.weekday);
     final announcementText = announcements.map((a) => a.text.trim()).join(' • ');
+    final weather = c.config.panoShowWeather ? c.weather : null;
+    final specialDays = c.config.panoShowSpecialDays ? c.specialDaysOn(_now) : const <SpecialDayToday>[];
+    final quote = c.config.panoShowQuote ? c.quoteOn(_now) : null;
 
     return DefaultTextStyle(
       style: const TextStyle(fontFamily: appFontFamily, color: AppColors.panoText),
@@ -115,16 +122,27 @@ class _PanoPageState extends State<PanoPage> {
                 const SizedBox(width: 20),
                 Expanded(child: Text(c.config.schoolName.isEmpty ? 'Okul Zili' : c.config.schoolName, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w600))),
                 Text(formatTurkishDate(_now), style: const TextStyle(fontSize: 32, color: AppColors.panoTextSecondary)),
+                if (weather != null) ...[
+                  Container(width: 2, height: 56, margin: const EdgeInsets.symmetric(horizontal: 32), color: AppColors.panoSurface),
+                  _WeatherView(weather: weather, now: _now),
+                ],
               ],
             ),
-            const SizedBox(height: 48),
+            SizedBox(height: weather != null ? 36 : 48),
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
                     flex: 155,
-                    child: Column(
+                    // Belirli gün/söz şeridi varken saat sütunu sığmazsa küçülür.
+                    child: LayoutBuilder(
+                      builder: (context, box) => FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: box.maxWidth,
+                          child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -175,6 +193,9 @@ class _PanoPageState extends State<PanoPage> {
                         ],
                       ],
                     ),
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 64),
                   Expanded(
@@ -215,6 +236,10 @@ class _PanoPageState extends State<PanoPage> {
                 ],
               ),
             ),
+            if (specialDays.isNotEmpty || quote != null) ...[
+              const SizedBox(height: 32),
+              _TodayStrip(specialDays: specialDays, quote: quote),
+            ],
           ],
         ),
           )),
@@ -290,6 +315,125 @@ class _PanoPageState extends State<PanoPage> {
             Text('${lesson.start} – ${lesson.end}'),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Üst şeritte hava durumu: simge, sıcaklık, durum ve günün aralığı.
+class _WeatherView extends StatelessWidget {
+  const _WeatherView({required this.weather, required this.now});
+
+  final WeatherReport weather;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, color) = weatherIcon(weather.code, isDay: weather.isDay);
+    final range = [
+      if (weather.min != null && weather.max != null) '${weather.min!.round()}° / ${weather.max!.round()}°',
+      if ((weather.precipitationChance ?? 0) >= 20) 'Yağış %${weather.precipitationChance}',
+    ].join(' · ');
+    // Bağlantı kesikse bilginin saati yazılır.
+    final stale = now.difference(weather.fetchedAt) > const Duration(minutes: 45);
+    final at = '${weather.fetchedAt.hour.toString().padLeft(2, '0')}:${weather.fetchedAt.minute.toString().padLeft(2, '0')}';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 52, color: color),
+        const SizedBox(width: 16),
+        Text('${weather.temperature.round()}°',
+            style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w700, fontFeatures: tabularFigures)),
+        const SizedBox(width: 18),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(weatherDescription(weather.code), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+            Text(
+              [if (range.isNotEmpty) range, if (stale) '$at itibarıyla', 'Open-Meteo.com'].join(' · '),
+              style: const TextStyle(fontSize: 18, color: AppColors.panoTextMuted),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Alt şerit: bugünün belirli gün/haftaları ve günün sözü.
+class _TodayStrip extends StatelessWidget {
+  const _TodayStrip({required this.specialDays, required this.quote});
+
+  final List<SpecialDayToday> specialDays;
+  final Quote? quote;
+
+  @override
+  Widget build(BuildContext context) {
+    const maxDays = 3;
+    final shown = specialDays.take(maxDays).toList();
+    final extra = specialDays.length - shown.length;
+    final days = shown.isEmpty
+        ? null
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.flag_rounded, size: 40, color: AppColors.recess),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('BUGÜN', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 2, color: AppColors.panoTextMuted)),
+                    const SizedBox(height: 4),
+                    for (final d in shown)
+                      Text(d.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: shown.length > 1 ? 26 : 32, fontWeight: FontWeight.w600)),
+                    if (extra > 0)
+                      Text('+$extra gün/hafta daha', style: const TextStyle(fontSize: 20, color: AppColors.panoTextSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          );
+    final q = quote;
+    final saying = q == null
+        ? null
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.format_quote_rounded, size: 44, color: AppColors.panoLesson),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('GÜNÜN SÖZÜ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: 2, color: AppColors.panoTextMuted)),
+                    const SizedBox(height: 4),
+                    Text(q.text, maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: q.text.length > 90 ? 24 : 28, fontWeight: FontWeight.w500, height: 1.25)),
+                    const SizedBox(height: 4),
+                    Text('— ${q.author}', style: const TextStyle(fontSize: 20, color: AppColors.panoTextSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          );
+    return Container(
+      constraints: const BoxConstraints(minHeight: 120),
+      padding: const EdgeInsets.fromLTRB(36, 24, 36, 24),
+      decoration: BoxDecoration(color: AppColors.panoSurface, borderRadius: BorderRadius.circular(28)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Bölme çizgisi üstteki saat / program sütunlarının arasına denk gelir.
+          if (saying != null) Expanded(flex: days == null ? 1 : 155, child: saying),
+          if (days != null && saying != null)
+            Container(width: 2, height: 96, margin: const EdgeInsets.symmetric(horizontal: 31), color: AppColors.panoGround),
+          if (days != null) Expanded(flex: saying == null ? 1 : 100, child: days),
+        ],
       ),
     );
   }

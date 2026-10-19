@@ -15,6 +15,7 @@ import 'package:okul_zili/platform/bell_player.dart';
 import 'package:okul_zili/platform/config_file_picker.dart';
 import 'package:okul_zili/platform/speech.dart';
 import 'package:okul_zili/platform/voice_recorder.dart';
+import 'package:okul_zili/platform/weather.dart';
 import 'package:okul_zili/ui/navigation.dart';
 
 class SilentPlayer implements BellPlayer {
@@ -92,6 +93,30 @@ class FakeRecorder implements VoiceRecorder {
   }
 }
 
+/// Ağsız hava durumu: verilen raporu döndürür ya da hata fırlatır.
+class FakeWeather implements WeatherClient {
+  FakeWeather({this.report, this.places = const []});
+
+  WeatherReport? report;
+  List<WeatherPlace> places;
+  int fetches = 0;
+  String? lastQuery;
+
+  @override
+  Future<List<WeatherPlace>> searchPlaces(String query) async {
+    lastQuery = query;
+    return places;
+  }
+
+  @override
+  Future<WeatherReport> fetch(WeatherPlace place) async {
+    fetches++;
+    final r = report;
+    if (r == null) throw const SocketException('internet yok');
+    return r;
+  }
+}
+
 /// Testlerde isolate'sız, 1000 iterasyonlu hızlı parola hesabı.
 class FastPasswordHasher implements PasswordHasher {
   const FastPasswordHasher();
@@ -164,6 +189,7 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
   PasswordHasher? passwordHasher,
   SpeechSynthesizer? speech,
   VoiceRecorder? recorder,
+  WeatherClient? weatherClient,
 
   /// Verilirse [now] yerine bu saat kullanılır (testte ileri sarmak için).
   DateTime Function()? clock,
@@ -192,6 +218,7 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
     passwordHasher: passwordHasher ?? const FastPasswordHasher(),
     speech: speech ?? FakeSpeech(),
     recorder: recorder ?? FakeRecorder(),
+    weatherClient: weatherClient ?? FakeWeather(),
   );
   final navigation = ValueNotifier(page);
   await tester.pumpWidget(OkulZiliApp(

@@ -20,6 +20,8 @@ import 'data/models/calendar.dart';
 import 'data/models/lock_settings.dart';
 import 'data/models/notices.dart';
 import 'data/models/spoken_announcement.dart';
+import 'data/quotes.dart';
+import 'data/special_days.dart' as special;
 import 'data/schedule_draft.dart';
 import 'platform/audio_file_picker.dart';
 import 'platform/bell_player.dart';
@@ -28,6 +30,7 @@ import 'platform/error_log.dart';
 import 'platform/speech.dart';
 import 'platform/system_services.dart';
 import 'platform/voice_recorder.dart';
+import 'platform/weather.dart';
 
 /// Ayarları, zamanlayıcıyı, ses çaları ve işletim sistemi servislerini bir
 /// araya getirir; arayüz bunu dinler.
@@ -45,7 +48,9 @@ class AppController extends ChangeNotifier {
     PasswordHasher? passwordHasher,
     SpeechSynthesizer? speech,
     VoiceRecorder? recorder,
+    WeatherClient? weatherClient,
   })  : _config = config,
+        weatherClient = weatherClient ?? const OpenMeteoClient(),
         speech = speech ?? const SystemSpeechSynthesizer(),
         recorder = recorder ?? MicVoiceRecorder(),
         pickAudioFile = pickAudioFile ?? pickAudioFileWithDialog,
@@ -86,6 +91,9 @@ class AppController extends ChangeNotifier {
 
   /// Mikrofondan anons kaydı.
   final VoiceRecorder recorder;
+
+  /// Hava durumu kaynağı (Open-Meteo).
+  final WeatherClient weatherClient;
 
   /// Açılacak ayar dosyasını seçtirir (vazgeçilirse null).
   final ConfigFilePicker pickConfigFile;
@@ -236,6 +244,7 @@ class AppController extends ChangeNotifier {
     system.preventSleep();
     restoreTodayFromLog();
     _scheduler.start();
+    _startWeather();
     _refreshVolume();
     _volumeTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshVolume());
     refreshAutostart();
@@ -364,6 +373,134 @@ class AppController extends ChangeNotifier {
     _ceremonyGuard = null;
     _ceremony = null;
     notifyListeners();
+  }
+
+  // ---- Pano: belirli günler, günün sözü, hava durumu ---------------------
+
+  /// [date] gününde süren belirli gün ve haftalar (kapatılanlar hariç).
+  List<special.SpecialDayToday> specialDaysOn(DateTime date) => special.specialDaysOn(
+        date,
+        disabled: _config.disabledSpecialDays,
+        announced: _config.announcedSpecialDays,
+      );
+
+  /// [date] gününün sözü (belirli güne uygun söz varsa o).
+  Quote quoteOn(DateTime date) => quoteForDay(date, specialDays: specialDaysOn(date));
+
+  Future<bool> setSpecialDayEnabled(String id, bool enabled) => updateConfig(_config.copyWith(
+        disabledSpecialDays: enabled
+            ? (_config.disabledSpecialDays.where((x) => x != id).toSet())
+            : {..._config.disabledSpecialDays, id},
+      ));
+
+  /// Tarihi her yıl ilan edilen günün aralığını girer; null ise kaldırır.
+  Future<bool> setAnnouncedSpecialDay(String id, special.DayRange? range) => updateConfig(_config.copyWith(
+        announcedSpecialDays: {
+          for (final e in _config.announcedSpecialDays.entries)
+            if (e.key != id) e.key: e.value,
+          id: ?range,
+        },
+      ));
+
+  Future<bool> setPanoExtras({bool? weather, bool? quote, bool? specialDays}) async {
+    final ok = await updateConfig(_config.copyWith(
+      panoShowWeather: weather,
+      panoShowQuote: quote,
+      panoShowSpecialDays: specialDays,
+    ));
+    if (ok && weather == true) unawaited(refreshWeather());
+    return ok;
+  }
+
+  WeatherReport? _weather;
+  bool _weatherLoading = false;
+
+  /// Sorgu sürerken konum değiştiyse bitince bir kez daha sorulur.
+  bool _weatherAgain = false;
+  Timer? _weatherTimer;
+
+  /// Hava durumu bu sıklıkla yenilenir (internet kesikse bir sonraki turda).
+  static const weatherRefresh = Duration(minutes: 30);
+
+  /// Bundan eski bilgi gösterilmez.
+  static const weatherMaxAge = Duration(hours: 6);
+
+  /// Gösterilebilecek son hava durumu (konum seçili ve bilgi taze ise).
+  WeatherReport? get weather {
+    final w = _weather;
+    if (w == null || _config.weatherPlace == null) return null;
+    if (_now().difference(w.fetchedAt) > weatherMaxAge) return null;
+    return w;
+  }
+
+  bool get weatherLoading => _weatherLoading;
+
+  File get _weatherCache => File('${repository.file.parent.path}${Platform.pathSeparator}hava.json');
+
+  void _startWeather() {
+    _loadWeatherCache();
+    unawaited(refreshWeather());
+    _weatherTimer?.cancel();
+    _weatherTimer = Timer.periodic(weatherRefresh, (_) => unawaited(refreshWeather()));
+  }
+
+  /// Son bilgi diske yazılır; açılışta internet yoksa da gösterilir.
+  void _loadWeatherCache() {
+    try {
+      final place = _config.weatherPlace;
+      if (place == null || !_weatherCache.existsSync()) return;
+      final json = jsonDecode(_weatherCache.readAsStringSync()) as Map<String, dynamic>;
+      final cachedPlace = WeatherPlace.fromJson(json['place'] as Map<String, dynamic>);
+      if (cachedPlace.latitude != place.latitude || cachedPlace.longitude != place.longitude) return;
+      _weather = WeatherReport.fromJson(json['report'] as Map<String, dynamic>);
+    } catch (e, st) {
+      ErrorLog.write('hava durumu önbelleği', e, st);
+    }
+  }
+
+  /// Hava durumunu yeniler. Hata olursa son bilgi kalır; zil işleyişini
+  /// hiçbir zaman etkilemez.
+  Future<void> refreshWeather() async {
+    final place = _config.weatherPlace;
+    if (place == null || !_config.panoShowWeather) return;
+    if (_weatherLoading) {
+      _weatherAgain = true;
+      return;
+    }
+    _weatherLoading = true;
+    try {
+      final report = (await weatherClient.fetch(place)).withFetchedAt(_now());
+      // Bu arada konum değiştiyse eski konumun bilgisi yazılmasın.
+      if (_config.weatherPlace?.latitude != place.latitude || _config.weatherPlace?.longitude != place.longitude) return;
+      _weather = report;
+      try {
+        _weatherCache.writeAsStringSync(jsonEncode({'place': place.toJson(), 'report': report.toJson()}));
+      } catch (_) {}
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[Zil] Hava durumu alınamadı: $e');
+    } finally {
+      _weatherLoading = false;
+      if (_weatherAgain) {
+        _weatherAgain = false;
+        unawaited(refreshWeather());
+      }
+    }
+  }
+
+  Future<List<WeatherPlace>> searchWeatherPlaces(String query) => weatherClient.searchPlaces(query);
+
+  /// Konumu seçer (null: hava durumu kapanır) ve hemen yeniler.
+  Future<bool> setWeatherPlace(WeatherPlace? place) async {
+    final ok = await updateConfig(_config.copyWith(weatherPlace: () => place));
+    if (!ok) return false;
+    _weather = null;
+    try {
+      if (_weatherCache.existsSync()) _weatherCache.deleteSync();
+    } catch (_) {}
+    notifyListeners();
+    unawaited(refreshWeather());
+    return true;
   }
 
   // ---- Sesli anonslar -----------------------------------------------------
@@ -1438,6 +1575,7 @@ class AppController extends ChangeNotifier {
     _ceremonyGuard?.cancel();
     _announcementGuard?.cancel();
     _chimeGuard?.cancel();
+    _weatherTimer?.cancel();
     _completedSub?.cancel();
     super.dispose();
   }

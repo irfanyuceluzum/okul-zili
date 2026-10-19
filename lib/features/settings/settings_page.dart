@@ -6,6 +6,7 @@ import '../../app_controller.dart';
 import '../../core/app_info.dart';
 import '../../data/config_repository.dart';
 import '../../data/models/app_config.dart';
+import '../../platform/weather.dart';
 import '../../ui/about_dialog.dart';
 import '../../ui/lock_dialog.dart';
 import '../../ui/navigation.dart';
@@ -316,19 +317,45 @@ class _SettingsPageState extends State<SettingsPage> {
                   icon: Icons.tv_outlined,
                   subtitle: 'Bilgisayar bu süre boyunca kullanılmazsa koridor ekranı görünümü kendiliğinden açılır. '
                       'Çıkmak için Esc tuşuna basın.',
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text('Kendiliğinden aç:', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(width: 16),
-                      SoftDropdown<int>(
-                        value: const [0, 1, 3, 5, 10, 15, 30].contains(c.config.panoIdleMinutes) ? c.config.panoIdleMinutes : 3,
-                        onChanged: (v) => c.updateConfig(c.config.copyWith(panoIdleMinutes: v)),
-                        items: [
-                          const DropdownMenuItem(value: 0, child: Text('Kapalı')),
-                          for (final m in const [1, 3, 5, 10, 15, 30])
-                            DropdownMenuItem(value: m, child: Text('$m dakika boşta kalınca')),
+                      Row(
+                        children: [
+                          const Text('Kendiliğinden aç:', style: TextStyle(fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 16),
+                          SoftDropdown<int>(
+                            value: const [0, 1, 3, 5, 10, 15, 30].contains(c.config.panoIdleMinutes) ? c.config.panoIdleMinutes : 3,
+                            onChanged: (v) => c.updateConfig(c.config.copyWith(panoIdleMinutes: v)),
+                            items: [
+                              const DropdownMenuItem(value: 0, child: Text('Kapalı')),
+                              for (final m in const [1, 3, 5, 10, 15, 30])
+                                DropdownMenuItem(value: m, child: Text('$m dakika boşta kalınca')),
+                            ],
+                          ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      const Divider(),
+                      _PanoSwitch(
+                        title: 'Belirli gün ve haftalar',
+                        subtitle: 'MEB çizelgesi ve farkındalık günleri. Tek tek açıp kapatmak için Takvim ve tatiller sayfası.',
+                        value: c.config.panoShowSpecialDays,
+                        onChanged: (v) => c.setPanoExtras(specialDays: v),
+                      ),
+                      _PanoSwitch(
+                        title: 'Günün sözü',
+                        subtitle: 'Atatürk\'ün sözleri ve atasözleri; her gün bir tane.',
+                        value: c.config.panoShowQuote,
+                        onChanged: (v) => c.setPanoExtras(quote: v),
+                      ),
+                      _PanoSwitch(
+                        title: 'Hava durumu',
+                        subtitle: 'İnternet gerekir; yarım saatte bir yenilenir. Kaynak: Open-Meteo.com',
+                        value: c.config.panoShowWeather,
+                        onChanged: (v) => c.setPanoExtras(weather: v),
+                      ),
+                      if (c.config.panoShowWeather) _WeatherPlaceRow(controller: c),
                     ],
                   ),
                 ),
@@ -442,4 +469,189 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
+}
+
+class _PanoSwitch extends StatelessWidget {
+  const _PanoSwitch({required this.title, required this.subtitle, required this.value, required this.onChanged});
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: value,
+        onChanged: onChanged,
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.inkSecondary)),
+      );
+}
+
+/// Hava durumu konumu: seçili yer, son bilgi ve "Konum seç…".
+class _WeatherPlaceRow extends StatelessWidget {
+  const _WeatherPlaceRow({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final place = c.config.weatherPlace;
+    final w = c.weather;
+    final status = place == null
+        ? 'Konum seçilmedi; panoda hava durumu görünmez.'
+        : w != null
+            ? 'Son bilgi: ${w.temperature.round()}° ${weatherDescription(w.code)} '
+                '(${w.fetchedAt.hour.toString().padLeft(2, '0')}:${w.fetchedAt.minute.toString().padLeft(2, '0')})'
+            : 'Henüz bilgi alınamadı. İnternet bağlantısını denetleyin.';
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: AppColors.field, borderRadius: BorderRadius.circular(14)),
+      child: Row(
+        children: [
+          const IconBadge(Icons.place_outlined),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(place?.label ?? 'Konum', style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(status, style: const TextStyle(fontSize: 13, color: AppColors.inkSecondary)),
+              ],
+            ),
+          ),
+          if (place != null)
+            IconButton(
+              tooltip: 'Şimdi yenile',
+              onPressed: c.weatherLoading ? null : c.refreshWeather,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          const SizedBox(width: 4),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+            onPressed: () => _pick(context),
+            icon: const Icon(Icons.search_rounded),
+            label: Text(place == null ? 'Konum seç…' : 'Değiştir…'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pick(BuildContext context) async {
+    final place = await showDialog<WeatherPlace>(
+      context: context,
+      builder: (context) => _WeatherPlaceDialog(controller: controller),
+    );
+    if (place != null) await controller.setWeatherPlace(place);
+  }
+}
+
+/// İl/ilçe adıyla konum arama (Open-Meteo, internet gerekir).
+class _WeatherPlaceDialog extends StatefulWidget {
+  const _WeatherPlaceDialog({required this.controller});
+
+  final AppController controller;
+
+  @override
+  State<_WeatherPlaceDialog> createState() => _WeatherPlaceDialogState();
+}
+
+class _WeatherPlaceDialogState extends State<_WeatherPlaceDialog> {
+  final _query = TextEditingController();
+  List<WeatherPlace>? _results;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final q = _query.text.trim();
+    if (q.length < 2) {
+      setState(() => _error = 'En az iki harf yazın');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final results = await widget.controller.searchWeatherPlaces(q);
+      if (!mounted) return;
+      setState(() {
+        _results = results;
+        if (results.isEmpty) _error = '"$q" bulunamadı. İlçe ya da il adını deneyin.';
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Arama yapılamadı. İnternet bağlantısını denetleyin.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Hava durumu konumu'),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _query,
+                      autofocus: true,
+                      decoration: const InputDecoration(labelText: 'İlçe ya da il', hintText: 'ör. Erzin'),
+                      onSubmitted: (_) => _search(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton(
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                    onPressed: _busy ? null : _search,
+                    child: const Text('Ara'),
+                  ),
+                ],
+              ),
+              if (_busy) const Padding(padding: EdgeInsets.only(top: 16), child: LinearProgressIndicator()),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(_error!, style: const TextStyle(color: AppColors.dangerText, fontWeight: FontWeight.w600)),
+                ),
+              if (_results != null && _results!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final p in _results!)
+                        ListTile(
+                          leading: const Icon(Icons.place_outlined),
+                          title: Text(p.name),
+                          subtitle: p.region.isEmpty ? null : Text(p.region),
+                          onTap: () => Navigator.pop(context, p),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Vazgeç')),
+        ],
+      );
 }

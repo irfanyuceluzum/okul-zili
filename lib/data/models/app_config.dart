@@ -3,7 +3,9 @@ import 'bell_event.dart';
 import '../../core/date_utils.dart';
 import 'calendar.dart';
 import 'lock_settings.dart';
+import '../special_days.dart';
 import 'spoken_announcement.dart';
+import 'weather_place.dart';
 import 'notices.dart';
 import 'schedule_template.dart';
 
@@ -67,6 +69,12 @@ class AppConfig {
     this.lock,
     this.ceremonySounds = const {},
     this.spokenAnnouncements = const [],
+    this.panoShowWeather = true,
+    this.panoShowQuote = true,
+    this.panoShowSpecialDays = true,
+    this.weatherPlace,
+    this.disabledSpecialDays = const {},
+    this.announcedSpecialDays = const {},
   });
 
   /// Ayar dosyasını okur. Tek tek okunamayan kayıtlar (bir tatil, bir
@@ -156,6 +164,12 @@ class AppConfig {
       lock: lock,
       ceremonySounds: ceremonySounds,
       spokenAnnouncements: list(json['spokenAnnouncements'], SpokenAnnouncement.fromJson, 'anons'),
+      panoShowWeather: json['panoShowWeather'] as bool? ?? true,
+      panoShowQuote: json['panoShowQuote'] as bool? ?? true,
+      panoShowSpecialDays: json['panoShowSpecialDays'] as bool? ?? true,
+      weatherPlace: _weatherPlace(json['weatherPlace'], warnings),
+      disabledSpecialDays: {for (final id in (json['disabledSpecialDays'] as List? ?? const [])) if (id is String) id},
+      announcedSpecialDays: _announced(json['announcedSpecialDays']),
     );
     if (skipped.isNotEmpty) {
       warnings?.add('Okunamayan kayıtlar atlandı: ${skipped.entries.map((e) => '${e.value} ${e.key}').join(', ')}.');
@@ -164,6 +178,30 @@ class AppConfig {
   }
 
   static int? _int(Object? v) => v is num ? v.toInt() : null;
+
+  static WeatherPlace? _weatherPlace(Object? v, List<String>? warnings) {
+    if (v == null) return null;
+    try {
+      return WeatherPlace.fromJson(v as Map<String, dynamic>);
+    } catch (_) {
+      warnings?.add('Hava durumu konumu okunamadı.');
+      return null;
+    }
+  }
+
+  static Map<String, DayRange> _announced(Object? v) {
+    final out = <String, DayRange>{};
+    if (v is! Map) return out;
+    for (final e in v.entries) {
+      final r = e.value;
+      if (e.key is! String || r is! Map) continue;
+      final start = DateTime.tryParse('${r['start']}');
+      final end = DateTime.tryParse('${r['end']}');
+      if (start == null || end == null || end.isBefore(start)) continue;
+      out[e.key as String] = DayRange(dateOnly(start), dateOnly(end));
+    }
+    return out;
+  }
 
   static const schemaVersion = 1;
 
@@ -205,6 +243,21 @@ class AppConfig {
   /// Sesli anonslar (dosya, mikrofon kaydı ya da yazıdan okuma).
   final List<SpokenAnnouncement> spokenAnnouncements;
 
+  /// Panoda hava durumu, günün sözü ve belirli günler gösterilsin mi.
+  final bool panoShowWeather;
+  final bool panoShowQuote;
+  final bool panoShowSpecialDays;
+
+  /// Hava durumu konumu; seçilmediyse hava durumu gösterilmez.
+  final WeatherPlace? weatherPlace;
+
+  /// Kapatılan belirli günlerin kimlikleri.
+  final Set<String> disabledSpecialDays;
+
+  /// Tarihi her yıl ilan edilen belirli günler (ör. Mevlid-i Nebî Haftası) için
+  /// okulun girdiği tarih aralığı.
+  final Map<String, DayRange> announcedSpecialDays;
+
   AppConfig copyWith({
     String? schoolName,
     List<ScheduleTemplate>? templates,
@@ -222,6 +275,12 @@ class AppConfig {
     LockSettings? Function()? lock,
     Map<Ceremony, String>? ceremonySounds,
     List<SpokenAnnouncement>? spokenAnnouncements,
+    bool? panoShowWeather,
+    bool? panoShowQuote,
+    bool? panoShowSpecialDays,
+    WeatherPlace? Function()? weatherPlace,
+    Set<String>? disabledSpecialDays,
+    Map<String, DayRange>? announcedSpecialDays,
   }) =>
       AppConfig(
         schoolName: schoolName ?? this.schoolName,
@@ -240,6 +299,12 @@ class AppConfig {
         lock: lock != null ? lock() : this.lock,
         ceremonySounds: ceremonySounds ?? this.ceremonySounds,
         spokenAnnouncements: spokenAnnouncements ?? this.spokenAnnouncements,
+        panoShowWeather: panoShowWeather ?? this.panoShowWeather,
+        panoShowQuote: panoShowQuote ?? this.panoShowQuote,
+        panoShowSpecialDays: panoShowSpecialDays ?? this.panoShowSpecialDays,
+        weatherPlace: weatherPlace != null ? weatherPlace() : this.weatherPlace,
+        disabledSpecialDays: disabledSpecialDays ?? this.disabledSpecialDays,
+        announcedSpecialDays: announcedSpecialDays ?? this.announcedSpecialDays,
       );
 
   /// [now] gününde panoda gösterilecek duyurular: açık, süresi dolmamış, metni dolu.
@@ -299,5 +364,15 @@ class AppConfig {
         if (ceremonySounds.isNotEmpty)
           'ceremonySounds': {for (final e in ceremonySounds.entries) e.key.name: e.value},
         if (spokenAnnouncements.isNotEmpty) 'spokenAnnouncements': spokenAnnouncements.map((a) => a.toJson()).toList(),
+        'panoShowWeather': panoShowWeather,
+        'panoShowQuote': panoShowQuote,
+        'panoShowSpecialDays': panoShowSpecialDays,
+        if (weatherPlace != null) 'weatherPlace': weatherPlace!.toJson(),
+        if (disabledSpecialDays.isNotEmpty) 'disabledSpecialDays': (disabledSpecialDays.toList()..sort()),
+        if (announcedSpecialDays.isNotEmpty)
+          'announcedSpecialDays': {
+            for (final e in announcedSpecialDays.entries)
+              e.key: {'start': dateKey(e.value.start), 'end': dateKey(e.value.end)},
+          },
       };
 }

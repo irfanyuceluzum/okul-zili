@@ -46,6 +46,18 @@ etkinlikler'de ses olarak seçilip belirli saatte kendiliğinden yapılır.
 - Mikrofon kaydı için **Ayarlar → Gizlilik ve güvenlik → Mikrofon** bölümünde
   masaüstü uygulamalarının mikrofona erişimi açık olmalıdır.
 
+## Pano: hava durumu, günün sözü, belirli günler
+
+- **Belirli gün ve haftalar:** MEB Eğitim Kurumları Sosyal Etkinlikler
+  Yönetmeliği EK-8 çizelgesi (18/1/2023, RG 32077) ve BM farkındalık günleri;
+  tarihler (ör. "Mayıs ayının 2. pazarı") her yıl hesaplanır. Takvim
+  sayfasından tek tek kapatılabilir; Mevlid-i Nebî Haftası'nın tarihi okulca
+  girilir.
+- **Günün sözü:** Atatürk'ün kaynağı belli sözleri ve atasözleri.
+- **Hava durumu:** [Open-Meteo](https://open-meteo.com) (ticari olmayan
+  kullanım için ücretsiz, veri CC BY 4.0). Konum Ayarlar'dan seçilir; internet
+  kesilince son bilgi saatiyle gösterilir.
+
 ## Geliştirme
 
 Geliştirme Mac'te macOS hedefiyle yapılır. Windows'a özgü kısımlar

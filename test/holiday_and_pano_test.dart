@@ -11,6 +11,8 @@ import 'package:okul_zili/main.dart';
 import 'package:okul_zili/platform/system_services.dart';
 import 'package:okul_zili/ui/navigation.dart';
 
+import 'package:okul_zili/ui/widgets.dart';
+
 import 'support/app_harness.dart';
 
 /// Sistem boşta süresini testten ayarlanabilen sahte servis.
@@ -170,10 +172,11 @@ void main() {
       final (controller, navigation) = await pumpApp(tester);
       await openCalendar(tester, navigation);
 
-      // Takvim hücresi değil, listedeki satır (sonra gelir).
-      await tester.ensureVisible(find.text('Cumhuriyet Bayramı').last);
+      // Takvim hücresi ya da belirli günler kartı değil, tatil listesindeki satır.
+      final row = find.descendant(of: find.widgetWithText(SectionCard, 'Tatiller'), matching: find.text('Cumhuriyet Bayramı'));
+      await tester.ensureVisible(row);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Cumhuriyet Bayramı').last);
+      await tester.tap(row);
       await tester.pumpAndSettle();
       expect(find.text('Tatili düzenle'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Cumhuriyet Bayramı (tam gün)');

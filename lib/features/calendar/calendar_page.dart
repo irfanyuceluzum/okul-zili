@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app_controller.dart';
 import '../../core/date_utils.dart';
 import '../../data/models/calendar.dart';
+import '../../data/special_days.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
 
@@ -91,6 +92,8 @@ class _CalendarPageState extends State<CalendarPage> {
               onDelete: _deleteHoliday,
               onShow: (h) => _select(h.start),
             ),
+            const SizedBox(height: 24),
+            _SpecialDaysCard(controller: c, today: today, onShow: _select),
           ],
         );
         return SingleChildScrollView(
@@ -504,6 +507,18 @@ class _DayPanelState extends State<_DayPanel> {
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
+            for (final s in widget.controller.specialDaysOn(day))
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.flag_rounded, size: 16, color: AppColors.lunch),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(s.label, style: const TextStyle(fontSize: 14, color: AppColors.lunchText))),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 4),
             Text(
               schedule.isSchoolDay ? '${schedule.bells.length} zil çalacak' : 'Zil çalmayacak',
               style: TextStyle(
@@ -832,4 +847,172 @@ class _DateField extends StatelessWidget {
           ),
         ],
       );
+}
+
+/// Belirli gün ve haftalar: yaklaşanlar önce; her biri açılıp kapatılır.
+/// Tarihi her yıl ilan edilenler (Mevlid-i Nebî Haftası) için tarih girilir.
+class _SpecialDaysCard extends StatefulWidget {
+  const _SpecialDaysCard({required this.controller, required this.today, required this.onShow});
+
+  final AppController controller;
+  final DateTime today;
+  final ValueChanged<DateTime> onShow;
+
+  @override
+  State<_SpecialDaysCard> createState() => _SpecialDaysCardState();
+}
+
+class _SpecialDaysCardState extends State<_SpecialDaysCard> {
+  bool _all = false;
+  static const _initial = 8;
+
+  /// Bugünden itibaren bir sonraki gerçekleşme (bu yıl geçtiyse gelecek yıl).
+  DayRange? _next(SpecialDay d) {
+    final config = widget.controller.config;
+    if (d.needsDate) return config.announcedSpecialDays[d.id];
+    final t = widget.today;
+    final r = d.rule.inYear(t.year);
+    if (r != null && !r.end.isBefore(t)) return r;
+    return d.rule.inYear(t.year + 1);
+  }
+
+  Future<void> _pickAnnounced(SpecialDay d) async {
+    final c = widget.controller;
+    final current = c.config.announcedSpecialDays[d.id];
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(widget.today.year - 1),
+      lastDate: DateTime(widget.today.year + 2, 12, 31),
+      initialDateRange: current == null ? null : DateTimeRange(start: current.start, end: current.end),
+      helpText: '${d.name} tarihleri',
+      saveText: 'Kaydet',
+    );
+    if (picked != null) await c.setAnnouncedSpecialDay(d.id, DayRange(dateOnly(picked.start), dateOnly(picked.end)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.controller;
+    final disabled = c.config.disabledSpecialDays;
+    final rows = [
+      for (final d in builtInSpecialDays) (d, _next(d)),
+    ]..sort((a, b) {
+        // Tarihi girilmemiş olanlar en sonda.
+        final x = a.$2?.start, y = b.$2?.start;
+        if (x == null) return y == null ? 0 : 1;
+        if (y == null) return -1;
+        return x.compareTo(y);
+      });
+    final shown = _all ? rows : rows.take(_initial).toList();
+    return SectionCard(
+      title: 'Belirli gün ve haftalar',
+      icon: Icons.flag_outlined,
+      subtitle: 'Panoda "Bugün" olarak gösterilir. Kaynak: MEB Sosyal Etkinlikler Yönetmeliği EK-8 ve farkındalık günleri.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (d, next) in shown)
+            _SpecialDayRow(
+              day: d,
+              next: next,
+              enabled: !disabled.contains(d.id),
+              onToggle: (v) => c.setSpecialDayEnabled(d.id, v),
+              onShow: next == null ? null : () => widget.onShow(next.start),
+              onPickDate: d.needsDate ? () => _pickAnnounced(d) : null,
+            ),
+          if (rows.length > _initial)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _all = !_all),
+                icon: Icon(_all ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+                label: Text(_all ? 'Daha az göster' : 'Tümünü göster (${rows.length})'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpecialDayRow extends StatelessWidget {
+  const _SpecialDayRow({
+    required this.day,
+    required this.next,
+    required this.enabled,
+    required this.onToggle,
+    required this.onShow,
+    required this.onPickDate,
+  });
+
+  final SpecialDay day;
+  final DayRange? next;
+  final bool enabled;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback? onShow;
+  final VoidCallback? onPickDate;
+
+  String _date(DayRange r) {
+    String one(DateTime d) => '${d.day} ${turkishMonths[d.month - 1]} ${d.year}';
+    if (r.isSingleDay) return one(r.start);
+    return r.start.month == r.end.month
+        ? '${r.start.day}–${r.end.day} ${turkishMonths[r.end.month - 1]} ${r.end.year}'
+        : '${r.start.day} ${turkishMonths[r.start.month - 1]} – ${one(r.end)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = next;
+    final muted = !enabled;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lineSoft))),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: onShow,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      day.name,
+                      style: TextStyle(fontWeight: FontWeight.w600, color: muted ? AppColors.inkMuted : AppColors.ink),
+                    ),
+                    Text(
+                      r == null
+                          ? '${day.rule.description} · tarih girilmedi'
+                          // Sabit tarihlerde açıklama tarihi tekrarlar; yalnız hesaplananlarda yazılır.
+                          : day.rule is FixedDay || day.rule is FixedRange
+                              ? _date(r)
+                              : '${_date(r)} · ${day.rule.description}',
+                      style: const TextStyle(fontSize: 13, color: AppColors.inkSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (day.category == SpecialDayCategory.awareness)
+            const Padding(
+              padding: EdgeInsets.only(left: 8),
+              child: Pill('Farkındalık', background: AppColors.okTint, foreground: AppColors.okText),
+            ),
+          if (onPickDate != null)
+            IconButton(
+              tooltip: '${day.name} tarihini gir',
+              onPressed: onPickDate,
+              icon: const Icon(Icons.edit_calendar_outlined, color: AppColors.inkSecondary),
+            ),
+          Tooltip(
+            message: enabled ? 'Panoda göster' : 'Panoda gösterme',
+            child: Switch(value: enabled, onChanged: onToggle),
+          ),
+        ],
+      ),
+    );
+  }
 }
