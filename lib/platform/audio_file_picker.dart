@@ -14,3 +14,9 @@ Future<String?> pickAudioFileWithDialog() async {
   );
   return file?.path;
 }
+
+/// Ses paketinin (ör. İstiklal Marşı, zil sesleri) bulunduğu klasörü seçtirir.
+typedef SoundFolderPicker = Future<String?> Function();
+
+Future<String?> pickSoundFolderWithDialog() =>
+    FilePicker.getDirectoryPath(dialogTitle: 'Ses dosyalarının bulunduğu klasörü seçin');

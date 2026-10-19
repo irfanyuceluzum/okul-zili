@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -20,6 +21,9 @@ class SilentPlayer implements BellPlayer {
 
   @override
   Future<void> stop() async {}
+
+  @override
+  Stream<void> get completed => const Stream.empty();
 }
 
 /// Testlerde isolate'sız, 1000 iterasyonlu hızlı parola hesabı.
@@ -49,6 +53,14 @@ class RecordingPlayer implements BellPlayer {
 
   @override
   Future<void> stop() async => stops++;
+
+  final _completed = StreamController<void>.broadcast(sync: true);
+
+  @override
+  Stream<void> get completed => _completed.stream;
+
+  /// Çalan sesin kendiliğinden bittiğini taklit eder.
+  void finish() => _completed.add(null);
 }
 
 /// Ölçüler gerçekçi olsun diye uygulamanın yazı tipini yükler (varsayılan
@@ -71,6 +83,7 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
   Size size = const Size(1280, 820),
   BellPlayer? player,
   AudioFilePicker? pickAudioFile,
+  SoundFolderPicker? pickSoundFolder,
   ConfigFilePicker? pickConfigFile,
   ExportPathPicker? pickExportPath,
   PasswordHasher? passwordHasher,
@@ -96,6 +109,7 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
     player: player ?? SilentPlayer(),
     now: clock ?? () => now,
     pickAudioFile: pickAudioFile,
+    pickSoundFolder: pickSoundFolder,
     pickConfigFile: pickConfigFile,
     pickExportPath: pickExportPath,
     passwordHasher: passwordHasher ?? const FastPasswordHasher(),

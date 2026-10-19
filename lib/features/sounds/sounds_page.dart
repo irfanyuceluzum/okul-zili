@@ -49,6 +49,51 @@ class SoundsPage extends StatelessWidget {
     }
   }
 
+  /// Klasördeki sesleri tek seferde yükler ve ne yapıldığını anlatır.
+  Future<void> _importPack(BuildContext context) async {
+    final path = await controller.pickSoundFolder();
+    if (path == null || !context.mounted) return;
+    final result = await controller.importSoundPack(path);
+    if (!context.mounted) return;
+    final event = controller.config.specialEvents.where((e) => e.id == '10-kasim').firstOrNull;
+    final lines = <String>[
+      if (result.error != null) result.error!,
+      if (result.added.isNotEmpty) 'Eklenen: ${result.added.join(', ')}.',
+      if (result.kept.isNotEmpty) 'Zaten yüklüydü: ${result.kept.join(', ')}.',
+      if (result.failed.isNotEmpty) 'Kopyalanamadı: ${result.failed.join(', ')}.',
+      if (result.error == null && result.ceremonies.isNotEmpty)
+        'Ana ekrandaki Tören düğmesinden çalınabilir: ${result.ceremonies.map((c) => c.label).join(', ')}.',
+      if (result.remembranceEventUpdated)
+        '10 Kasım saygı duruşu etkinliği siren yerine "${Ceremony.remembrance.label}" kaydını çalacak.'
+            '${event != null && !event.enabled ? ' Etkinlik şu an kapalı; Özel etkinlikler sayfasından açabilirsiniz.' : ''}',
+      if (result.error == null) 'Hangi zilde hangi zil sesinin çalacağını bu sayfadaki listeden seçin.',
+    ];
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(result.error == null ? 'Ses paketi yüklendi' : 'Ses paketi yüklenemedi'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final line in lines)
+                Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(line)),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _rename(BuildContext context, BellSound sound) async {
     final text = TextEditingController(text: sound.name);
     final name = await showDialog<String>(
@@ -115,6 +160,25 @@ class SoundsPage extends StatelessWidget {
             ],
           ),
         );
+        final ceremonies = SectionCard(
+          title: 'Tören kayıtları',
+          subtitle: 'Ana ekrandaki Tören düğmesi bu kayıtları bir kez çalar. Kayıtlar uygulamayla gelmez; '
+              '"Ses paketi yükle…" ile yükleyin.',
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+          child: Column(
+            children: [
+              for (final (kind, hint) in const [
+                (Ceremony.anthem, 'Bayrak töreni'),
+                (Ceremony.remembrance, '10 Kasım ve anma törenleri'),
+              ])
+                _CeremonyRow(controller: controller, kind: kind, hint: hint, onPreview: (s) => _preview(context, s)),
+            ],
+          ),
+        );
+        final settingsColumn = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [assignments, const SizedBox(height: 24), ceremonies],
+        );
         final files = SectionCard(
           title: 'Ses dosyaları',
           subtitle: 'Desteklenen biçimler: ${supportedAudioExtensions.join(', ')}. '
@@ -150,6 +214,12 @@ class SoundsPage extends StatelessWidget {
                       icon: const Icon(Icons.stop_rounded),
                       label: const Text('Sesi durdur'),
                     ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                      onPressed: () => _importPack(context),
+                      icon: const Icon(Icons.folder_open),
+                      label: const Text('Ses paketi yükle…'),
+                    ),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
                       onPressed: () => _add(context),
@@ -164,13 +234,13 @@ class SoundsPage extends StatelessWidget {
                 if (c.maxWidth < 1000) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [assignments, const SizedBox(height: 24), files],
+                    children: [settingsColumn, const SizedBox(height: 24), files],
                   );
                 }
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: assignments),
+                    Expanded(child: settingsColumn),
                     const SizedBox(width: 24),
                     Expanded(child: files),
                   ],
@@ -226,6 +296,53 @@ class _AssignmentRow extends StatelessWidget {
             ),
           IconButton(
             tooltip: '${type.label} sesini dinle',
+            onPressed: current == null ? null : () => onPreview(current),
+            icon: const Icon(Icons.play_arrow_rounded, color: AppColors.lesson),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CeremonyRow extends StatelessWidget {
+  const _CeremonyRow({required this.controller, required this.kind, required this.hint, required this.onPreview});
+
+  final AppController controller;
+  final Ceremony kind;
+  final String hint;
+  final ValueChanged<BellSound> onPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    final config = controller.config;
+    final current = config.ceremonySound(kind);
+    return Container(
+      constraints: const BoxConstraints(minHeight: 60),
+      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lineSoft))),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(kind.label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(hint, style: const TextStyle(fontSize: 13, color: AppColors.inkSecondary)),
+              ],
+            ),
+          ),
+          DropdownButton<String?>(
+            value: current?.id,
+            onChanged: (id) => controller.setCeremonySound(kind, id),
+            items: [
+              const DropdownMenuItem<String?>(value: null, child: Text('Seçilmedi')),
+              for (final s in config.sounds.where((s) => !s.isAsset))
+                DropdownMenuItem<String?>(value: s.id, child: Text(s.name)),
+            ],
+          ),
+          IconButton(
+            tooltip: '${kind.label} dinle',
             onPressed: current == null ? null : () => onPreview(current),
             icon: const Icon(Icons.play_arrow_rounded, color: AppColors.lesson),
           ),

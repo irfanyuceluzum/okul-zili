@@ -19,6 +19,7 @@ class BellScheduler {
     required this.ring,
     required this.onLog,
     this.holdReason,
+    this.deferWhile,
     Now? now,
     this.tolerance = const Duration(seconds: 60),
     this.maxSleep = const Duration(seconds: 15),
@@ -36,6 +37,11 @@ class BellScheduler {
   /// Null olmayan bir neden dönerse programlı ziller çalınmaz, bu nedenle
   /// "susturuldu" olarak kaydedilir (ör. acil durum alarmı sürerken).
   final String? Function()? holdReason;
+
+  /// True döndükçe zamanı gelen ziller işlenmez, bekletilir (ör. İstiklal
+  /// Marşı çalarken marş kesilmesin). Bitince tolerans içindeyse geç de olsa
+  /// çalınır, değilse "kaçırıldı" yazılır.
+  final bool Function()? deferWhile;
 
   /// Zil saatinden bu kadar sonrasına kadar geç de olsa çalınır.
   /// Ayar değişince [AppController] günceller.
@@ -101,6 +107,7 @@ class BellScheduler {
   /// Zamanı gelmiş zilleri işler ve bir sonraki kontrole kadar beklenecek
   /// süreyi döndürür. Testlerde doğrudan çağrılır.
   Future<Duration> tick() async {
+    if (deferWhile?.call() ?? false) return const Duration(seconds: 1);
     final now = _now();
     final day = resolveDay(now);
     final dayPrefix = '${dateKey(day.date)}|';

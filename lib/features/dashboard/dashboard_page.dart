@@ -6,6 +6,7 @@ import '../../app_controller.dart';
 import '../../core/date_utils.dart';
 import '../../core/scheduler/bell_log.dart';
 import '../../core/scheduler/day_schedule.dart';
+import '../../data/models/app_config.dart';
 import '../../data/models/bell_event.dart';
 import '../../ui/navigation.dart';
 import '../../ui/theme.dart';
@@ -121,6 +122,19 @@ class _DashboardPageState extends State<DashboardPage> {
           style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.dangerText, minimumSize: const Size(0, 44)),
           onPressed: c.stopSound,
           child: const Text('Alarmı durdur'),
+        ),
+      ));
+    }
+    if (c.ceremonyPlaying case final ceremony?) {
+      add(_Banner(
+        background: AppColors.lesson,
+        foreground: Colors.white,
+        icon: Icons.flag_outlined,
+        text: '${ceremony.label} çalıyor. Ziller kayıt bitince çalar.',
+        action: FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.lessonText, minimumSize: const Size(0, 44)),
+          onPressed: c.stopSound,
+          child: const Text('Durdur'),
         ),
       ));
     }
@@ -410,6 +424,13 @@ class _QuickActions extends StatelessWidget {
 
   final AppController controller;
 
+  Future<void> _startCeremony(BuildContext context, Ceremony kind) async {
+    final error = await controller.startCeremony(kind);
+    if (error != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = controller;
@@ -423,10 +444,32 @@ class _QuickActions extends StatelessWidget {
             runSpacing: 12,
             children: [
               FilledButton.icon(
-                onPressed: c.emergencyActive ? null : c.ringNow,
+                onPressed: c.emergencyActive || c.ceremonyPlaying != null ? null : c.ringNow,
                 icon: const Icon(Icons.notifications_active_outlined),
                 label: const Text('Şimdi zil çal'),
               ),
+              if (c.ceremonyPlaying != null)
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.lessonText),
+                  onPressed: c.stopSound,
+                  icon: const Icon(Icons.stop_rounded),
+                  label: const Text('Töreni durdur'),
+                )
+              else
+                MenuAnchor(
+                  builder: (context, menu, _) => OutlinedButton.icon(
+                    onPressed: c.emergencyActive ? null : () => menu.isOpen ? menu.close() : menu.open(),
+                    icon: const Icon(Icons.flag_outlined),
+                    label: const Row(mainAxisSize: MainAxisSize.min, children: [Text('Tören'), SizedBox(width: 4), Icon(Icons.expand_more, size: 18)]),
+                  ),
+                  menuChildren: [
+                    for (final kind in Ceremony.values)
+                      MenuItemButton(
+                        onPressed: () => _startCeremony(context, kind),
+                        child: Text(c.config.ceremonySound(kind) == null ? '${kind.label} (yüklenmedi)' : kind.label),
+                      ),
+                  ],
+                ),
               if (c.isMuted)
                 OutlinedButton.icon(
                   onPressed: c.unmute,

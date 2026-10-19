@@ -114,7 +114,7 @@ class SpecialEvent {
   /// Doluysa ses bu kadar saniye tekrarlanır (ör. 10 Kasım sireni).
   final int? loopSeconds;
 
-  SpecialEvent copyWith({bool? enabled, String? Function()? soundId}) => SpecialEvent(
+  SpecialEvent copyWith({bool? enabled, String? Function()? soundId, int? Function()? loopSeconds}) => SpecialEvent(
         id: id,
         name: name,
         time: time,
@@ -125,7 +125,7 @@ class SpecialEvent {
         weekdays: weekdays,
         month: month,
         day: day,
-        loopSeconds: loopSeconds,
+        loopSeconds: loopSeconds == null ? this.loopSeconds : loopSeconds(),
       );
 
   bool occursOn(DateTime d) => switch (recurrence) {

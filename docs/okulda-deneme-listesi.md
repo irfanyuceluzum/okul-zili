@@ -29,6 +29,13 @@ Kurulum dosyası: GitHub → Releases → **Okul Zili 0.5.0** →
 - [ ] Acil durum alarmı 2 sn basılı tutunca çalıyor, "Alarmı durdur" ile susuyor.
 - [ ] Ders programında bir dersin süresini değiştirince sonraki dersler kayıyor; Kaydet'e basmadan eski program çalmaya devam ediyor.
 
+## 3a. Ses paketi ve tören
+- [ ] Yedi ses dosyası (İstiklal Marşı, saygı duruşu + İstiklal Marşı, zil sesleri) bir klasöre kondu; Zil sesleri → "Ses paketi yükle…" ile yüklendi, adlar doğru göründü.
+- [ ] Her zil türü için istenen zil sesi seçildi ve dinlendi.
+- [ ] Ana ekran → Tören → İstiklal Marşı hoparlörden sonuna kadar çalıyor; "Töreni durdur" kesiyor.
+- [ ] Marş bir zil saatine denk gelince zil marşı kesmiyor, marş bitince çalıyor (Kayıtlar'da görünür).
+- [ ] 10 Kasım etkinliği (Özel etkinlikler) saygı duruşu kaydını çalacak şekilde görünüyor; "Dinle" ile denendi.
+
 ## 4. Pano modu
 - [ ] 3 dk dokunulmayınca pano açılıyor (yazı alanında imleç ya da açık pencere yokken).
 - [ ] Duyuru bandı akıyor, bugünün nöbetçileri görünüyor; projeksiyon/TV çözünürlüğünde yazılar taşmıyor.

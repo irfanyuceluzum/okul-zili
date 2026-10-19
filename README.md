@@ -16,6 +16,23 @@ derlemesini yapar ve aynı dosyayı üretir:
 Kurulum yönetici izni istemez; "Bilgisayar açılınca otomatik başlat" seçeneği
 varsayılan olarak işaretlidir.
 
+## Zil sesleri ve törenler
+
+Uygulama yalnız kendi yerleşik seslerini (klasik zil, ding-dong, siren) içerir.
+İstiklal Marşı, saygı duruşu ve diğer zil sesi kayıtları telif nedeniyle depoda
+**yoktur**; okul kendi kayıtlarını yükler:
+
+1. Ses dosyalarını (mp3, wav, m4a, aac, wma) tek bir klasöre koyun.
+2. **Zil sesleri → Ses paketi yükle…** ile klasörü seçin.
+3. Adında "istiklal" geçen dosya *İstiklal Marşı*, "saygı" geçen dosya
+   *Saygı duruşu ve İstiklal Marşı* olarak tanınır ve ana ekrandaki **Tören**
+   düğmesine atanır; saygı duruşu kaydı 10 Kasım etkinliğine de atanır.
+   "zilsesi3" gibi adlar *Zil sesi 3* olur; hangi zilde hangisinin çalacağını
+   aynı sayfadan seçin.
+
+Tören kaydı çalarken saati gelen zil marşı kesmez; kayıt bitince (gecikme
+toleransı içindeyse) çalar.
+
 ## Geliştirme
 
 Geliştirme Mac'te macOS hedefiyle yapılır. Windows'a özgü kısımlar

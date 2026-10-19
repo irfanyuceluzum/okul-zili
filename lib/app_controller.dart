@@ -33,11 +33,13 @@ class AppController extends ChangeNotifier {
     SystemServices? system,
     DateTime Function()? now,
     AudioFilePicker? pickAudioFile,
+    SoundFolderPicker? pickSoundFolder,
     ConfigFilePicker? pickConfigFile,
     ExportPathPicker? pickExportPath,
     PasswordHasher? passwordHasher,
   })  : _config = config,
         pickAudioFile = pickAudioFile ?? pickAudioFileWithDialog,
+        pickSoundFolder = pickSoundFolder ?? pickSoundFolderWithDialog,
         pickConfigFile = pickConfigFile ?? pickConfigFileWithDialog,
         pickExportPath = pickExportPath ?? pickExportPathWithDialog,
         system = system ?? const NoopSystemServices(),
@@ -48,9 +50,11 @@ class AppController extends ChangeNotifier {
       ring: _ring,
       onLog: _onLog,
       holdReason: () => _emergencyActive ? 'Acil durum alarmı sürüyor' : null,
+      deferWhile: () => _ceremony != null,
       tolerance: Duration(seconds: config.lateToleranceSeconds),
       now: _now,
     );
+    _completedSub = player.completed.listen((_) => _endCeremony());
   }
 
   static const _fallbackAlarm =
@@ -62,6 +66,9 @@ class AppController extends ChangeNotifier {
 
   /// Ses dosyası seçme penceresi (testlerde sahtesiyle değiştirilir).
   final AudioFilePicker pickAudioFile;
+
+  /// Ses paketi klasörü seçme penceresi (testlerde sahtesiyle değiştirilir).
+  final SoundFolderPicker pickSoundFolder;
 
   /// Açılacak ayar dosyasını seçtirir (vazgeçilirse null).
   final ConfigFilePicker pickConfigFile;
@@ -103,6 +110,16 @@ class AppController extends ChangeNotifier {
 
   bool _emergencyActive = false;
   bool get emergencyActive => _emergencyActive;
+
+  /// Şu an çalan tören kaydı (İstiklal Marşı vb.); yoksa null.
+  Ceremony? _ceremony;
+  Ceremony? get ceremonyPlaying => _ceremony;
+  Timer? _ceremonyGuard;
+  StreamSubscription<void>? _completedSub;
+
+  /// Kaydın bittiği bildirimi gelmezse (ses sistemi takılırsa) ziller en çok
+  /// bu kadar bekletilir.
+  static const maxCeremony = Duration(minutes: 5);
 
   VolumeStatus _volume = const VolumeStatus();
   VolumeStatus get volume => _volume;
@@ -183,12 +200,13 @@ class AppController extends ChangeNotifier {
 
   /// Acil durum alarmı çalarken zil çalınmaz; alarmı kesmesin.
   Future<void> ringNow() async {
-    if (_emergencyActive) return;
+    if (_emergencyActive || _ceremony != null) return;
     await _scheduler.ringNow();
   }
 
   Future<void> stopSound() async {
     await player.stop();
+    _endCeremony();
     if (_emergencyActive) {
       _emergencyActive = false;
       notifyListeners();
@@ -220,6 +238,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> startEmergency() async {
+    // Acil durum her şeyden önce gelir; çalan tören kaydı siren ile kesilir.
+    _ceremonyGuard?.cancel();
+    _ceremony = null;
     _emergencyActive = true;
     notifyListeners();
     final bell = BellEvent(
@@ -243,6 +264,52 @@ class AppController extends ChangeNotifier {
       _emergencyActive = false;
       _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.failed, detail: '$e'));
     }
+  }
+
+  /// Ana ekrandaki Tören düğmesi: kayıt bir kez çalar. Çalarken programlı
+  /// ziller marşı kesmez; bekletilir ve bitince tolerans içindeyse çalar.
+  /// Kayıt yoksa ya da çalınamazsa yerine zil çalınmaz, açıklama döner.
+  /// Susturma törene uygulanmaz (elle başlatılır).
+  Future<String?> startCeremony(Ceremony kind) async {
+    if (_emergencyActive) return 'Acil durum alarmı çalarken tören kaydı çalınamaz.';
+    final sound = _config.ceremonySound(kind);
+    if (sound == null) {
+      return '"${kind.label}" kaydı yüklenmemiş. Zil sesleri sayfasında "Ses paketi yükle…" ile yükleyin.';
+    }
+    if (!sound.isAsset && !File(sound.path).existsSync()) {
+      return '"${sound.name}" dosyası bulunamadı. Zil sesleri sayfasında ses paketini yeniden yükleyin.';
+    }
+    final at = _now();
+    final bell = BellEvent(
+      id: 'ceremony-${at.millisecondsSinceEpoch}',
+      time: ClockTime(at.hour, at.minute),
+      type: BellType.special,
+      label: kind.label,
+    );
+    // Önceki bir zilin süreli durdurucusu marşı kesmesin.
+    _playId++;
+    _ceremony = kind;
+    _ceremonyGuard?.cancel();
+    _ceremonyGuard = Timer(maxCeremony, _endCeremony);
+    notifyListeners();
+    _ensureAudible(_config.volumePercent);
+    try {
+      await player.play(sound, volumePercent: system.controlsVolume ? 100 : _config.volumePercent);
+      _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.played));
+      return null;
+    } catch (e) {
+      _endCeremony();
+      _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.failed, detail: '$e'));
+      return '"${kind.label}" çalınamadı: $e';
+    }
+  }
+
+  void _endCeremony() {
+    if (_ceremony == null) return;
+    _ceremonyGuard?.cancel();
+    _ceremonyGuard = null;
+    _ceremony = null;
+    notifyListeners();
   }
 
   /// Ayarı hemen geçerli kılar ve diske kaydeder; kaydedilemezse false
@@ -547,6 +614,7 @@ class AppController extends ChangeNotifier {
   /// döndürür.
   Future<String?> previewSound(BellSound sound, {int? stopAfter}) async {
     if (_emergencyActive) return 'Acil durum alarmı çalarken ses dinletilemez';
+    if (_ceremony != null) return '${_ceremony!.label} çalarken ses dinletilemez';
     _ensureAudible(_config.volumePercent);
     return _playWithFallback(sound, loop: stopAfter != null, stopAfter: stopAfter);
   }
@@ -567,12 +635,143 @@ class AppController extends ChangeNotifier {
     return sound;
   }
 
+  /// Klasördeki ses dosyalarını tek seferde yükler. Adından tanınanlar
+  /// adlandırılır (İstiklal Marşı, saygı duruşu, "Zil sesi N"); tören
+  /// kayıtları Tören düğmesine, saygı duruşu kaydı da (okul başka bir ses
+  /// seçmediyse) 10 Kasım etkinliğine atanır. Hangi zilde hangi zil sesinin
+  /// çalacağına okul karar verir; zil türleri değiştirilmez. Aynı adla önceden
+  /// yüklenmiş ve dosyası duran ses yeniden kopyalanmaz.
+  Future<SoundPackResult> importSoundPack(String dirPath) async {
+    final List<File> files;
+    try {
+      files = Directory(dirPath)
+          .listSync()
+          .whereType<File>()
+          .where((f) => supportedAudioExtensions.contains(_extensionOf(f.path)))
+          .toList()
+        // Tanınan ada göre: "Zil sesi 2", "Zil sesi 10"dan önce gelir.
+        ..sort((a, b) => _naturalKey(_displayNameOf(a.path)).compareTo(_naturalKey(_displayNameOf(b.path))));
+    } catch (e) {
+      return SoundPackResult(error: 'Klasör okunamadı: $e');
+    }
+    if (files.isEmpty) {
+      return const SoundPackResult(error: 'Bu klasörde ses dosyası (mp3, wav, m4a, aac, wma) yok.');
+    }
+    if (isLockEnabled && isLocked) {
+      _refuseLocked();
+      return const SoundPackResult(error: lockedMessage);
+    }
+
+    final sep = Platform.pathSeparator;
+    final dir = Directory('${repository.file.parent.path}${sep}sesler')..createSync(recursive: true);
+    final sounds = [..._config.sounds];
+    final ceremonies = {..._config.ceremonySounds};
+    final added = <String>[];
+    final kept = <String>[];
+    final failed = <String>[];
+    var serial = 0;
+    for (final file in files) {
+      final fileName = file.path.split(RegExp(r'[/\\]')).last;
+      final (:name, :ceremony) = recognizeSoundName(fileName);
+      final index = sounds.indexWhere((s) => !s.isAsset && s.name == name);
+      final String id;
+      if (index >= 0 && File(sounds[index].path).existsSync()) {
+        id = sounds[index].id;
+        kept.add(name);
+      } else {
+        // Aynı adlı ama dosyası kaybolmuş ses aynı kimlikle yenilenir; ona
+        // bağlı ziller ve etkinlikler kendiliğinden düzelir.
+        id = index >= 0 ? sounds[index].id : 's${DateTime.now().microsecondsSinceEpoch}${serial++}';
+        final dest = '${dir.path}$sep$id.${_extensionOf(file.path)}';
+        try {
+          file.copySync(dest);
+        } catch (e) {
+          failed.add(fileName);
+          continue;
+        }
+        final sound = BellSound(id: id, name: name, path: dest);
+        if (index >= 0) {
+          sounds[index] = sound;
+        } else {
+          sounds.add(sound);
+        }
+        added.add(name);
+      }
+      if (ceremony != null) ceremonies[ceremony] = id;
+    }
+
+    // 10 Kasım: siren yerine saygı duruşu + İstiklal Marşı kaydı bir kez çalsın.
+    final remembrance = ceremonies[Ceremony.remembrance];
+    var eventUpdated = false;
+    final events = [
+      for (final ev in _config.specialEvents)
+        if (remembrance != null &&
+            ev.id == '10-kasim' &&
+            ev.soundId != remembrance &&
+            (ev.soundId == null || ev.soundId == _fallbackAlarm.id))
+          () {
+            eventUpdated = true;
+            return ev.copyWith(soundId: () => remembrance, loopSeconds: () => null);
+          }()
+        else
+          ev,
+    ];
+
+    final ok = await updateConfig(_config.copyWith(sounds: sounds, ceremonySounds: ceremonies, specialEvents: events));
+    if (!ok) {
+      return SoundPackResult(error: lastError ?? 'Ayarlar kaydedilemedi.');
+    }
+    return SoundPackResult(
+      added: added,
+      kept: kept,
+      failed: failed,
+      ceremonies: {for (final e in ceremonies.entries) e.key},
+      remembranceEventUpdated: eventUpdated,
+    );
+  }
+
+  /// Dosya adından sesin görünen adını ve tören türünü çıkarır.
+  /// "17153218_istiklalmarsi.mp3" → İstiklal Marşı, "zilsesi4.mp3" → Zil sesi 4.
+  static ({String name, Ceremony? ceremony}) recognizeSoundName(String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    var stem = dot > 0 ? fileName.substring(0, dot) : fileName;
+    // Sitelerin eklediği sayısal önek ("17153032_") ada girmesin.
+    stem = stem.replaceFirst(RegExp(r'^\d{5,}[_\- ]+'), '');
+    final key = _fold(stem).replaceAll(RegExp(r'[_\-.]+'), ' ');
+    if (key.contains('saygi')) return (name: Ceremony.remembrance.label, ceremony: Ceremony.remembrance);
+    if (key.contains('istiklal')) return (name: Ceremony.anthem.label, ceremony: Ceremony.anthem);
+    final bell = RegExp(r'zil ?sesi ?(\d+)').firstMatch(key);
+    if (bell != null) return (name: 'Zil sesi ${int.parse(bell.group(1)!)}', ceremony: null);
+    return (name: stem.trim().isEmpty ? fileName : stem.trim(), ceremony: null);
+  }
+
+  /// Türkçe harfleri sadeleştirip küçük harfe çevirir (karşılaştırma için).
+  static String _fold(String s) {
+    const map = {'ı': 'i', 'ş': 's', 'ğ': 'g', 'ü': 'u', 'ö': 'o', 'ç': 'c'};
+    final lower = s.replaceAll('İ', 'i').replaceAll('I', 'i').toLowerCase();
+    return lower.split('').map((c) => map[c] ?? c).join();
+  }
+
+  static String _extensionOf(String path) {
+    final name = path.split(RegExp(r'[/\\]')).last;
+    final dot = name.lastIndexOf('.');
+    return dot > 0 ? name.substring(dot + 1).toLowerCase() : '';
+  }
+
+  static String _displayNameOf(String path) => recognizeSoundName(path.split(RegExp(r'[/\\]')).last).name;
+
+  /// "Zil sesi 10", "Zil sesi 2"den sonra gelsin diye sayılar sıfırla doldurulur.
+  static String _naturalKey(String text) =>
+      _fold(text).replaceAllMapped(RegExp(r'\d+'), (m) => m.group(0)!.padLeft(8, '0'));
+
   /// Sesin kullanıldığı yerler (zil türleri ve etkinlikler).
   List<String> soundUsages(String soundId) => [
         for (final e in _config.soundForType.entries)
           if (e.value == soundId) e.key.label,
         for (final ev in _config.specialEvents)
           if (ev.soundId == soundId) ev.name,
+        for (final e in _config.ceremonySounds.entries)
+          if (e.value == soundId) 'Tören: ${e.key.label}',
       ];
 
   Future<void> renameSound(BellSound sound, String name) => updateConfig(_config.copyWith(sounds: [
@@ -597,6 +796,10 @@ class AppController extends ChangeNotifier {
       specialEvents: [
         for (final ev in _config.specialEvents) ev.soundId == sound.id ? ev.copyWith(soundId: () => null) : ev,
       ],
+      ceremonySounds: {
+        for (final e in _config.ceremonySounds.entries)
+          if (e.value != sound.id) e.key: e.value,
+      },
     ));
     try {
       File(sound.path).deleteSync();
@@ -605,6 +808,13 @@ class AppController extends ChangeNotifier {
 
   Future<void> setSoundForType(BellType type, String soundId) =>
       updateConfig(_config.copyWith(soundForType: {..._config.soundForType, type: soundId}));
+
+  /// Tören düğmesinde çalacak kaydı seçer; null ise kaldırır.
+  Future<void> setCeremonySound(Ceremony kind, String? soundId) => updateConfig(_config.copyWith(ceremonySounds: {
+        for (final e in _config.ceremonySounds.entries)
+          if (e.key != kind) e.key: e.value,
+        kind: ?soundId,
+      }));
 
   // ---- Özel etkinlikler ----------------------------------------------------
 
@@ -733,6 +943,10 @@ class AppController extends ChangeNotifier {
   @visibleForTesting
   void debugLog(BellLogEntry entry) => _onLog(entry);
 
+  /// Zamanlayıcıyı bir kez işletir (testte saati elle ilerletirken).
+  @visibleForTesting
+  Future<Duration> debugTick() => _scheduler.tick();
+
   void _refreshVolume() {
     if (!system.controlsVolume) return;
     final v = system.readVolume();
@@ -823,6 +1037,8 @@ class AppController extends ChangeNotifier {
   void dispose() {
     _scheduler.stop();
     _volumeTimer?.cancel();
+    _ceremonyGuard?.cancel();
+    _completedSub?.cancel();
     super.dispose();
   }
 }
@@ -837,4 +1053,33 @@ class ReplaceResult {
   /// Dosyası bulunamayan seslerin adları (çalarken klasik zil çalar).
   final List<String> missingSounds;
   final List<String> warnings;
+}
+
+/// Ses paketi yükleme sonucu.
+class SoundPackResult {
+  const SoundPackResult({
+    this.error,
+    this.added = const [],
+    this.kept = const [],
+    this.failed = const [],
+    this.ceremonies = const {},
+    this.remembranceEventUpdated = false,
+  });
+
+  final String? error;
+
+  /// Yeni yüklenen (ya da kaybolmuş dosyası yenilenen) seslerin adları.
+  final List<String> added;
+
+  /// Zaten yüklü olduğu için kopyalanmayanlar.
+  final List<String> kept;
+
+  /// Kopyalanamayan dosya adları.
+  final List<String> failed;
+
+  /// Tören düğmesinde artık çalınabilen kayıtlar.
+  final Set<Ceremony> ceremonies;
+
+  /// 10 Kasım etkinliğinin sesi saygı duruşu kaydına çevrildi mi.
+  final bool remembranceEventUpdated;
 }

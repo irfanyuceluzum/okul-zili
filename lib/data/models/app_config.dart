@@ -38,6 +38,16 @@ class BellSound {
 
 /// Uygulamanın tüm ayarları. Tek bir JSON dosyasında saklanır; böylece
 /// yedeklemek veya başka bir okula aktarmak kolaydır.
+/// Ana ekrandaki Tören düğmesinden elle çalınan kayıtlar.
+enum Ceremony {
+  anthem('İstiklal Marşı'),
+  remembrance('Saygı duruşu ve İstiklal Marşı');
+
+  const Ceremony(this.label);
+
+  final String label;
+}
+
 class AppConfig {
   const AppConfig({
     required this.schoolName,
@@ -54,6 +64,7 @@ class AppConfig {
     this.lateToleranceSeconds = 60,
     this.panoIdleMinutes = 3,
     this.lock,
+    this.ceremonySounds = const {},
   });
 
   /// Ayar dosyasını okur. Tek tek okunamayan kayıtlar (bir tatil, bir
@@ -115,6 +126,17 @@ class AppConfig {
       }
     }
 
+    final ceremonySounds = <Ceremony, String>{};
+    final rawCeremonies = json['ceremonySounds'];
+    if (rawCeremonies is Map) {
+      for (final e in rawCeremonies.entries) {
+        final kind = Ceremony.values.where((c) => c.name == e.key).firstOrNull;
+        if (kind != null && e.value is String && sounds.any((s) => s.id == e.value)) {
+          ceremonySounds[kind] = e.value as String;
+        }
+      }
+    }
+
     final config = AppConfig(
       schoolName: json['schoolName'] is String ? json['schoolName'] as String : '',
       templates: templates,
@@ -130,6 +152,7 @@ class AppConfig {
       lateToleranceSeconds: _int(json['lateToleranceSeconds']) ?? 60,
       panoIdleMinutes: _int(json['panoIdleMinutes']) ?? 3,
       lock: lock,
+      ceremonySounds: ceremonySounds,
     );
     if (skipped.isNotEmpty) {
       warnings?.add('Okunamayan kayıtlar atlandı: ${skipped.entries.map((e) => '${e.value} ${e.key}').join(', ')}.');
@@ -172,6 +195,10 @@ class AppConfig {
   /// Ayarlar kilidi; null ise kilit yok. Yalnız parola özetleri tutulur.
   final LockSettings? lock;
 
+  /// Tören → ses kimliği. Ses paketi yüklenince dolar; kayıtlar uygulamayla
+  /// gelmez (telif), okul kendisi yükler.
+  final Map<Ceremony, String> ceremonySounds;
+
   AppConfig copyWith({
     String? schoolName,
     List<ScheduleTemplate>? templates,
@@ -187,6 +214,7 @@ class AppConfig {
     int? lateToleranceSeconds,
     int? panoIdleMinutes,
     LockSettings? Function()? lock,
+    Map<Ceremony, String>? ceremonySounds,
   }) =>
       AppConfig(
         schoolName: schoolName ?? this.schoolName,
@@ -203,6 +231,7 @@ class AppConfig {
         lateToleranceSeconds: lateToleranceSeconds ?? this.lateToleranceSeconds,
         panoIdleMinutes: panoIdleMinutes ?? this.panoIdleMinutes,
         lock: lock != null ? lock() : this.lock,
+        ceremonySounds: ceremonySounds ?? this.ceremonySounds,
       );
 
   /// [now] gününde panoda gösterilecek duyurular: açık, süresi dolmamış, metni dolu.
@@ -221,6 +250,11 @@ class AppConfig {
 
   BellSound? soundById(String id) =>
       sounds.where((s) => s.id == id).firstOrNull;
+
+  BellSound? ceremonySound(Ceremony kind) {
+    final id = ceremonySounds[kind];
+    return id == null ? null : soundById(id);
+  }
 
   /// Zil için çalınacak sesi bulur: önce zile özel ses, sonra türün sesi,
   /// en son listedeki ilk ses.
@@ -251,5 +285,7 @@ class AppConfig {
         'lateToleranceSeconds': lateToleranceSeconds,
         'panoIdleMinutes': panoIdleMinutes,
         if (lock != null) 'lock': lock!.toJson(),
+        if (ceremonySounds.isNotEmpty)
+          'ceremonySounds': {for (final e in ceremonySounds.entries) e.key.name: e.value},
       };
 }
