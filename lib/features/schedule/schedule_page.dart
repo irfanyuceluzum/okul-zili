@@ -471,7 +471,7 @@ class _TemplateEditorState extends State<_TemplateEditor> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text('Öğretmen zili: '),
-                    DropdownButton<int>(
+                    SoftDropdown<int>(
                       value: t.teacherBellMinutesBefore.clamp(0, 10),
                       onChanged: (v) => widget.onChanged(t.copyWith(teacherBellMinutesBefore: v)),
                       items: [
@@ -485,7 +485,7 @@ class _TemplateEditorState extends State<_TemplateEditor> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text('Öğle arası: '),
-                    DropdownButton<int>(
+                    SoftDropdown<int>(
                       value: (t.lunchAfterLesson != null && t.lunchAfterLesson! < t.lessons.length) ? t.lunchAfterLesson : 0,
                       onChanged: (v) => widget.onChanged(t.copyWith(lunchAfterLesson: () => v == 0 ? null : v)),
                       items: [
@@ -813,6 +813,7 @@ class _QuickFillState extends State<_QuickFill> {
   Widget build(BuildContext context) {
     return SectionCard(
       title: 'Hızlı doldur',
+      icon: Icons.auto_fix_high_outlined,
       subtitle: 'Süreleri verin, tüm saatler hesaplansın. Sonra tek tek düzeltebilirsiniz.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -830,7 +831,7 @@ class _QuickFillState extends State<_QuickFill> {
               _NumberField(label: 'Teneffüs (dk)', value: _breakMin, min: 0, max: 60, onChanged: (v) => setState(() => _breakMin = v)),
               _Labeled(
                 label: 'Öğle arası',
-                child: DropdownButton<int>(
+                child: SoftDropdown<int>(
                   value: _lunchAfter < _count ? _lunchAfter : 0,
                   onChanged: (v) => setState(() => _lunchAfter = v ?? 0),
                   items: [
@@ -945,6 +946,7 @@ class _WeekPlan extends StatelessWidget {
   Widget build(BuildContext context) {
     return SectionCard(
       title: 'Haftalık plan',
+      icon: Icons.view_week_outlined,
       subtitle: 'Her gün hangi şablonun kullanılacağını seçin.',
       child: Column(
         children: [
@@ -955,7 +957,7 @@ class _WeekPlan extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(child: Text(turkishWeekdays[d - 1], style: const TextStyle(fontWeight: FontWeight.w600))),
-                  DropdownButton<String?>(
+                  SoftDropdown<String?>(
                     value: draft.byId(draft.weekPlan[d] ?? '') == null ? null : draft.weekPlan[d],
                     onChanged: (id) => onChanged(d, id),
                     items: [
@@ -1052,7 +1054,7 @@ class _NewTemplateDialogState extends State<_NewTemplateDialog> {
             ),
             const SizedBox(height: 20),
             const Text('Başlangıç', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.inkSecondary)),
-            DropdownButton<String?>(
+            SoftDropdown<String?>(
               isExpanded: true,
               value: _copyFrom,
               onChanged: (v) => setState(() => _copyFrom = v),

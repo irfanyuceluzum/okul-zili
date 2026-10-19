@@ -120,7 +120,20 @@ class _AppShellState extends State<AppShell> {
                 onSelect: _go,
                 onLock: _lockNow,
               ),
-              Expanded(child: _page(page)),
+              Expanded(
+                // Sayfa değişince kısa, yumuşak bir belirme (eski sayfa ağaçta tutulmaz).
+                child: TweenAnimationBuilder<double>(
+                  key: ValueKey(page),
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, t, child) => Opacity(
+                    opacity: 0.35 + 0.65 * t,
+                    child: Transform.translate(offset: Offset(0, 10 * (1 - t)), child: child),
+                  ),
+                  child: _page(page),
+                ),
+              ),
             ],
           ),
         );
@@ -181,7 +194,8 @@ class _Sidebar extends StatelessWidget {
       width: compact ? 80 : 240,
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.line)),
+        border: Border(right: BorderSide(color: AppColors.lineSoft)),
+        boxShadow: [BoxShadow(color: Color(0x0814213D), blurRadius: 16, offset: Offset(2, 0))],
       ),
       padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16, vertical: 24),
       // Kısa pencerede (ör. 640 px, kilit düğmesi de varken) menü taşmasın: sığmazsa kayar,
@@ -209,8 +223,16 @@ class _Sidebar extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: BoxDecoration(color: AppColors.recess, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.notifications, color: AppColors.ink),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFF9D66A), AppColors.recess],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [BoxShadow(color: Color(0x40F2C230), blurRadius: 12, offset: Offset(0, 4))],
+                ),
+                child: const Icon(Icons.notifications_rounded, color: AppColors.ink),
               ),
               if (!compact) ...[
                 const SizedBox(width: 12),
@@ -311,20 +333,23 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? AppColors.lessonText : (outlined ? AppColors.ink : AppColors.inkSecondary);
+    final fg = selected ? AppColors.lesson : (outlined ? AppColors.ink : AppColors.inkSecondary);
     final text = label ?? page.label;
     final semanticText = locked ? '$text (kilitli)' : (badge ? '$text (kaydedilmedi)' : text);
     final item = Material(
-      color: selected ? AppColors.lessonTint : Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: outlined ? const BorderSide(color: AppColors.line) : BorderSide.none,
-      ),
+      color: selected ? AppColors.lessonTint : (outlined ? AppColors.ground : Colors.transparent),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
+        hoverColor: AppColors.ground,
         onTap: onTap,
-        child: SizedBox(
+        child: Container(
           height: 44,
+          // Seçili sayfada solda vurgu çubuğu.
+          decoration: selected && !compact
+              ? const BoxDecoration(border: Border(left: BorderSide(color: AppColors.lesson, width: 3)))
+              : null,
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 12),
             child: Row(

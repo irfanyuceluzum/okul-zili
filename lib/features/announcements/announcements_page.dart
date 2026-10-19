@@ -152,6 +152,7 @@ class _AnnouncementsPageState extends State<AnnouncementsPage> {
                 ),
               SectionCard(
                 title: 'Kayıtlı anonslar',
+                icon: Icons.record_voice_over_outlined,
                 subtitle: 'Ana ekrandaki "Anons" düğmesinden yapılır. Belirli saatte kendiliğinden yapılması için '
                     'Özel etkinlikler sayfasında etkinlik ekleyip ses olarak anonsu seçin.',
                 padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
@@ -236,7 +237,7 @@ class AnnouncementButtons extends StatelessWidget {
         IconButton(
           tooltip: '${a.name} durdur',
           onPressed: active ? controller.stopSound : null,
-          icon: Icon(Icons.stop_rounded, color: active ? AppColors.ink : AppColors.inkMuted),
+          icon: Icon(Icons.stop_rounded, color: active ? AppColors.ink : AppColors.lineStrong),
         ),
       ],
     );

@@ -147,6 +147,7 @@ class EventsPage extends StatelessWidget {
               const SizedBox(height: 24),
               SectionCard(
                 title: 'Hazır etkinlikler',
+                icon: Icons.auto_awesome_outlined,
                 subtitle: 'Tıklayınca saat ve günleri doldurulmuş olarak açılır; kaydetmeden önce kontrol edin.',
                 child: Wrap(
                   spacing: 8,
@@ -164,6 +165,7 @@ class EventsPage extends StatelessWidget {
               const SizedBox(height: 24),
               SectionCard(
                 title: 'Etkinlikler',
+                icon: Icons.event_note_outlined,
                 padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
                 child: Column(
                   children: [
@@ -423,13 +425,13 @@ class _EventDialogState extends State<EventDialog> {
                   ),
                 Recurrence.yearly => Row(
                     children: [
-                      DropdownButton<int>(
+                      SoftDropdown<int>(
                         value: _day,
                         onChanged: (v) => setState(() => _day = v ?? _day),
                         items: [for (var d = 1; d <= 31; d++) DropdownMenuItem(value: d, child: Text('$d'))],
                       ),
                       const SizedBox(width: 12),
-                      DropdownButton<int>(
+                      SoftDropdown<int>(
                         value: _month,
                         onChanged: (v) => setState(() => _month = v ?? _month),
                         items: [for (var m = 1; m <= 12; m++) DropdownMenuItem(value: m, child: Text(turkishMonths[m - 1]))],
@@ -448,7 +450,7 @@ class _EventDialogState extends State<EventDialog> {
               },
               const SizedBox(height: 20),
               const Text('Ses', style: label),
-              DropdownButton<String?>(
+              SoftDropdown<String?>(
                 isExpanded: true,
                 value: soundValue,
                 onChanged: (v) => setState(() => _soundId = v),
@@ -466,7 +468,7 @@ class _EventDialogState extends State<EventDialog> {
               if (!_isAnnouncement) ...[
                 const SizedBox(height: 16),
                 const Text('Çalma', style: label),
-                DropdownButton<int?>(
+                SoftDropdown<int?>(
                   isExpanded: true,
                   value: _loopOptions.contains(_loopSeconds) ? _loopSeconds : null,
                   onChanged: (v) => setState(() => _loopSeconds = v),

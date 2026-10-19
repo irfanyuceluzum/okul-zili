@@ -603,6 +603,7 @@ class _HolidayList extends StatelessWidget {
     final holidays = [...controller.config.holidays]..sort((a, b) => a.start.compareTo(b.start));
     return SectionCard(
       title: 'Tatiller',
+      icon: Icons.beach_access_outlined,
       subtitle: 'Düzenlemek için bir satıra tıklayın',
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
       child: Column(

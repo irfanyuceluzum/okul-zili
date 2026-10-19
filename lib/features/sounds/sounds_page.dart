@@ -152,7 +152,7 @@ class SoundsPage extends StatelessWidget {
                       const Text('Bu zillerde yerine çalacak ses:', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(width: 12),
                       Flexible(
-                        child: DropdownButton<String>(
+                        child: SoftDropdown<String>(
                           isExpanded: true,
                           value: replacement,
                           onChanged: (v) => setState(() => replacement = v),
@@ -200,6 +200,7 @@ class SoundsPage extends StatelessWidget {
         final config = controller.config;
         final assignments = SectionCard(
           title: 'Hangi zilde hangi ses çalsın?',
+          icon: Icons.tune_rounded,
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
           child: Column(
             children: [
@@ -209,6 +210,7 @@ class SoundsPage extends StatelessWidget {
         );
         final ceremonies = SectionCard(
           title: 'Tören kayıtları',
+          icon: Icons.flag_outlined,
           subtitle: 'Ana ekrandaki Tören düğmesi bu kayıtları bir kez çalar. Kayıtlar uygulamayla gelmez; '
               '"Ses paketi yükle…" ile yükleyin.',
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
@@ -229,6 +231,7 @@ class SoundsPage extends StatelessWidget {
         final missing = controller.missingBuiltInSounds;
         final files = SectionCard(
           title: 'Ses dosyaları',
+          icon: Icons.library_music_outlined,
           trailing: missing.isEmpty
               ? null
               : TextButton.icon(
@@ -341,7 +344,7 @@ class _AssignmentRow extends StatelessWidget {
               ],
             ),
           ),
-          DropdownButton<String>(
+          SoftDropdown<String>(
             value: current?.id,
             hint: Text('${builtIn.name} (yerleşik)'),
             onChanged: (id) {
@@ -385,7 +388,7 @@ class _CeremonyRow extends StatelessWidget {
               ],
             ),
           ),
-          DropdownButton<String?>(
+          SoftDropdown<String?>(
             value: current?.id,
             onChanged: (id) => controller.setCeremonySound(kind, id),
             items: [
@@ -426,7 +429,7 @@ class PlaybackButtons extends StatelessWidget {
         IconButton(
           tooltip: '$label durdur',
           onPressed: active ? controller.stopSound : null,
-          icon: Icon(Icons.stop_rounded, color: active ? AppColors.ink : AppColors.inkMuted),
+          icon: Icon(Icons.stop_rounded, color: active ? AppColors.ink : AppColors.lineStrong),
         ),
       ],
     );

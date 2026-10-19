@@ -60,6 +60,7 @@ class NoticesPage extends StatelessWidget {
               const SizedBox(height: 24),
               SectionCard(
                 title: 'Duyurular',
+                icon: Icons.campaign_outlined,
                 subtitle: 'Pano modunda ekranın altında kayar.',
                 trailing: FilledButton.icon(
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
@@ -368,6 +369,7 @@ class _DutyCardState extends State<_DutyCard> {
     final days = _weekend ? 7 : 5;
     return SectionCard(
       title: 'Nöbetçi öğretmenler',
+      icon: Icons.badge_outlined,
       subtitle: 'Pano modunda o günün nöbetçileri gösterilir.',
       trailing: Row(
         mainAxisSize: MainAxisSize.min,

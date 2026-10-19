@@ -227,6 +227,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 24),
                 SectionCard(
                   title: 'Okul',
+                  icon: Icons.school_outlined,
                   child: Row(
                     children: [
                       Expanded(
@@ -252,6 +253,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 24),
                 SectionCard(
                   title: 'Zil sesi',
+                  icon: Icons.volume_up_outlined,
                   subtitle: c.system.controlsVolume
                       ? 'Zil çalmadan önce bilgisayarın sessiz modu kapatılır ve ses en az bu seviyeye açılır.'
                       : 'Zil bu seviyede çalar. (Sistem sesi yalnızca Windows\'ta otomatik açılır.)',
@@ -296,6 +298,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 24),
                 SectionCard(
                   title: 'Başlatma',
+                  icon: Icons.power_settings_new_rounded,
                   child: c.system.supportsAutostart
                       ? SwitchListTile(
                           contentPadding: EdgeInsets.zero,
@@ -310,13 +313,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 24),
                 SectionCard(
                   title: 'Pano modu',
+                  icon: Icons.tv_outlined,
                   subtitle: 'Bilgisayar bu süre boyunca kullanılmazsa koridor ekranı görünümü kendiliğinden açılır. '
                       'Çıkmak için Esc tuşuna basın.',
                   child: Row(
                     children: [
                       const Text('Kendiliğinden aç:', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(width: 16),
-                      DropdownButton<int>(
+                      SoftDropdown<int>(
                         value: const [0, 1, 3, 5, 10, 15, 30].contains(c.config.panoIdleMinutes) ? c.config.panoIdleMinutes : 3,
                         onChanged: (v) => c.updateConfig(c.config.copyWith(panoIdleMinutes: v)),
                         items: [
@@ -331,6 +335,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 24),
                 SectionCard(
                   title: 'Şifre kilidi',
+                  icon: Icons.lock_outline_rounded,
                   subtitle: 'Kilitliyken zil çalma, susturma, acil durum ve pano serbesttir; ayarlar korunur. '
                       'Şifre unutulursa kurtarma koduyla açılır.',
                   child: c.isLockEnabled
@@ -365,6 +370,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 24),
                 SectionCard(
                   title: 'Yedekler ve taşıma',
+                  icon: Icons.backup_outlined,
                   subtitle: 'Ayarlar kaydedildikçe otomatik yedek alınır. '
                       'Başka bir okula taşımak için ayarları dışa aktarın.',
                   child: Column(
@@ -400,6 +406,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 24),
                 SectionCard(
                   title: 'Hakkında',
+                  icon: Icons.info_outline_rounded,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

@@ -50,43 +50,95 @@ class Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(6)),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(8)),
         child: Text(label, style: TextStyle(color: foreground, fontSize: 12, fontWeight: FontWeight.w600)),
       );
 }
 
-/// Başlıklı beyaz kart.
+/// Yumuşak gölgeli beyaz yüzey (çizgi yerine derinlik).
+class AppCard extends StatelessWidget {
+  const AppCard({super.key, required this.child, this.padding, this.color = AppColors.surface, this.radius = 20});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final Color color;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: padding,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(radius),
+          boxShadow: AppShadows.card,
+        ),
+        child: Material(type: MaterialType.transparency, child: child),
+      );
+}
+
+/// Yuvarlak köşeli renkli zemin üstünde simge (kart başlıkları, bilgi kutuları).
+class IconBadge extends StatelessWidget {
+  const IconBadge(this.icon, {super.key, this.background = AppColors.lessonTint, this.foreground = AppColors.lesson, this.size = 36});
+
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(size * 0.32)),
+        child: Icon(icon, size: size * 0.55, color: foreground),
+      );
+}
+
+/// Başlıklı beyaz kart. [icon] verilirse başlığın solunda renkli rozet olur.
 class SectionCard extends StatelessWidget {
-  const SectionCard({super.key, this.title, this.subtitle, this.trailing, required this.child, this.padding = const EdgeInsets.fromLTRB(24, 20, 24, 20)});
+  const SectionCard({
+    super.key,
+    this.title,
+    this.subtitle,
+    this.trailing,
+    this.icon,
+    required this.child,
+    this.padding = const EdgeInsets.fromLTRB(24, 22, 24, 22),
+  });
 
   final String? title;
   final String? subtitle;
   final Widget? trailing;
+  final IconData? icon;
   final Widget child;
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           if (title != null)
             Padding(
-              padding: EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, 12),
+              padding: EdgeInsets.fromLTRB(padding.left, padding.top, padding.right, 14),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: subtitle == null ? CrossAxisAlignment.center : CrossAxisAlignment.start,
                 children: [
+                  if (icon != null) ...[IconBadge(icon!), const SizedBox(width: 14)],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(title!, style: theme.textTheme.titleMedium),
-                        if (subtitle != null) Text(subtitle!, style: theme.textTheme.bodySmall),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 2),
+                          Text(subtitle!, style: theme.textTheme.bodySmall?.copyWith(height: 1.35)),
+                        ],
                       ],
                     ),
                   ),
@@ -102,6 +154,49 @@ class SectionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Yumuşak dolgulu açılır seçim kutusu (alt çizgisiz). İçeride standart
+/// [DropdownButton] durur.
+class SoftDropdown<T> extends StatelessWidget {
+  const SoftDropdown({
+    super.key,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    this.hint,
+    this.isExpanded = false,
+  });
+
+  final T? value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?>? onChanged;
+  final Widget? hint;
+  final bool isExpanded;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 44,
+        padding: const EdgeInsets.only(left: 14, right: 8),
+        decoration: BoxDecoration(
+          color: AppColors.field,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<T>(
+            value: value,
+            items: items,
+            onChanged: onChanged,
+            hint: hint,
+            isExpanded: isExpanded,
+            borderRadius: BorderRadius.circular(14),
+            dropdownColor: AppColors.surface,
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.inkSecondary),
+            style: const TextStyle(fontFamily: appFontFamily, fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.ink),
+          ),
+        ),
+      );
 }
 
 /// Sayfa başlığı ve açıklaması.
@@ -201,11 +296,12 @@ class _HoldToConfirmButtonState extends State<HoldToConfirmButton> with SingleTi
                 height: 52,
                 decoration: BoxDecoration(
                   color: AppColors.dangerTint,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.danger, width: 2),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.danger.withValues(alpha: 0.55), width: 1.5),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
+                  alignment: AlignmentDirectional.centerStart,
                   children: [
                     Positioned.fill(
                       child: FractionallySizedBox(
@@ -240,66 +336,50 @@ class _HoldToConfirmButtonState extends State<HoldToConfirmButton> with SingleTi
 }
 
 /// Günün ders/teneffüs çizelgesi: renkli şerit ve "şimdi" işareti.
+/// [dark] pano için; [onColor] renk geçişli kartın üstünde (beyaz tonlar).
 class DayTimeline extends StatelessWidget {
-  const DayTimeline({super.key, required this.day, required this.now, this.dark = false});
+  const DayTimeline({super.key, required this.day, required this.now, this.dark = false, this.onColor});
 
   final DaySchedule day;
   final DateTime now;
   final bool dark;
 
+  /// Doluysa şerit bu rengin tonlarıyla çizilir (ör. lacivert kart üstünde beyaz).
+  final Color? onColor;
+
   @override
   Widget build(BuildContext context) {
     final t = day.template;
     if (t == null || t.lessons.isEmpty) return const SizedBox.shrink();
-    final segments = _segments(t);
     final start = (t.assemblyTime ?? t.lessons.first.start).on(day.date);
     final end = t.lessons.last.end.on(day.date);
     final total = end.difference(start).inSeconds;
-    final pos = (now.difference(start).inSeconds / total).clamp(0.0, 1.0);
+    final pos = total <= 0 ? 0.0 : (now.difference(start).inSeconds / total).clamp(0.0, 1.0);
     final showMarker = !now.isBefore(start) && now.isBefore(end);
-    final labelColor = dark ? AppColors.panoTextSecondary : AppColors.lessonText;
-    final markerColor = dark ? AppColors.panoText : AppColors.ink;
+    final on = onColor;
+    final labelColor = on?.withValues(alpha: 0.85) ?? (dark ? AppColors.panoTextSecondary : AppColors.lessonText);
+    final markerColor = on ?? (dark ? AppColors.panoText : AppColors.ink);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
-          height: 32,
-          child: LayoutBuilder(builder: (context, c) {
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  left: 0, right: 0, top: 6, height: 20,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Row(
-                      children: [
-                        for (var i = 0; i < segments.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 2),
-                          Expanded(flex: segments[i].minutes, child: ColoredBox(color: segments[i].color)),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                if (showMarker) ...[
-                  Positioned(
-                    left: 0, top: 6, height: 20, width: c.maxWidth * pos,
-                    child: ColoredBox(color: (dark ? AppColors.panoGround : AppColors.lessonTint).withValues(alpha: 0.55)),
-                  ),
-                  Positioned(
-                    left: c.maxWidth * pos - 1.5, top: 0, width: 3, height: 32,
-                    child: DecoratedBox(decoration: BoxDecoration(color: markerColor, borderRadius: BorderRadius.circular(2))),
-                  ),
-                ],
-              ],
-            );
-          }),
+          height: 28,
+          child: CustomPaint(
+            painter: _TimelinePainter(
+              segments: _segments(t, on),
+              position: showMarker ? pos : null,
+              marker: markerColor,
+              pastShade: on == null
+                  ? (dark ? AppColors.panoGround : Colors.white).withValues(alpha: 0.55)
+                  : Colors.white.withValues(alpha: 0.0),
+              dimPast: on != null,
+            ),
+          ),
         ),
         const SizedBox(height: 6),
-        DefaultTextStyle(
-          style: TextStyle(fontSize: 13, color: labelColor, fontFeatures: tabularFigures),
+        DefaultTextStyle.merge(
+          style: TextStyle(fontSize: 13, color: labelColor, fontFeatures: tabularFigures, fontWeight: FontWeight.w500),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [Text('${t.assemblyTime ?? t.lessons.first.start}'), Text('${t.lessons.last.end}')],
@@ -309,15 +389,17 @@ class DayTimeline extends StatelessWidget {
     );
   }
 
-  List<_Segment> _segments(ScheduleTemplate t) {
+  List<_Segment> _segments(ScheduleTemplate t, Color? on) {
+    final lesson = on ?? (dark ? AppColors.panoLesson : AppColors.lesson);
     final out = <_Segment>[];
     final first = t.lessons.first.start;
     if (t.assemblyTime != null && t.assemblyTime! < first) {
-      out.add(_Segment(first.inMinutes - t.assemblyTime!.inMinutes, AppColors.assembly));
+      out.add(_Segment(first.inMinutes - t.assemblyTime!.inMinutes,
+          on?.withValues(alpha: 0.35) ?? AppColors.assembly));
     }
     for (var i = 0; i < t.lessons.length; i++) {
       final l = t.lessons[i];
-      out.add(_Segment(l.end.inMinutes - l.start.inMinutes, dark ? AppColors.panoLesson : AppColors.lesson));
+      out.add(_Segment(l.end.inMinutes - l.start.inMinutes, lesson));
       if (i < t.lessons.length - 1) {
         final gap = t.lessons[i + 1].start.inMinutes - l.end.inMinutes;
         if (gap > 0) {
@@ -328,6 +410,67 @@ class DayTimeline extends StatelessWidget {
     }
     return out.where((s) => s.minutes > 0).toList();
   }
+}
+
+class _TimelinePainter extends CustomPainter {
+  _TimelinePainter({
+    required this.segments,
+    required this.position,
+    required this.marker,
+    required this.pastShade,
+    required this.dimPast,
+  });
+
+  final List<_Segment> segments;
+  final double? position;
+  final Color marker;
+  final Color pastShade;
+
+  /// Renkli kart üstünde geçmiş kısım saydamlaştırılır (örtü yerine).
+  final bool dimPast;
+
+  static const _gap = 2.0;
+  static const _barTop = 6.0;
+  static const _barHeight = 16.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final totalMinutes = segments.fold<int>(0, (a, s) => a + s.minutes);
+    if (totalMinutes == 0) return;
+    final usable = size.width - _gap * (segments.length - 1);
+    final cut = position == null ? null : size.width * position!;
+    final bar = RRect.fromRectAndRadius(Rect.fromLTWH(0, _barTop, size.width, _barHeight), const Radius.circular(8));
+    canvas.save();
+    canvas.clipRRect(bar);
+    var x = 0.0;
+    for (final s in segments) {
+      final w = usable * s.minutes / totalMinutes;
+      final rect = Rect.fromLTWH(x, _barTop, w, _barHeight);
+      if (dimPast && cut != null && x + w <= cut) {
+        canvas.drawRect(rect, Paint()..color = s.color.withValues(alpha: s.color.a * 0.4));
+      } else if (dimPast && cut != null && x < cut) {
+        canvas.drawRect(Rect.fromLTRB(x, _barTop, cut, _barTop + _barHeight),
+            Paint()..color = s.color.withValues(alpha: s.color.a * 0.4));
+        canvas.drawRect(Rect.fromLTRB(cut, _barTop, x + w, _barTop + _barHeight), Paint()..color = s.color);
+      } else {
+        canvas.drawRect(rect, Paint()..color = s.color);
+      }
+      x += w + _gap;
+    }
+    if (!dimPast && cut != null) {
+      canvas.drawRect(Rect.fromLTWH(0, _barTop, cut, _barHeight), Paint()..color = pastShade);
+    }
+    canvas.restore();
+    if (cut != null) {
+      final markerRect = RRect.fromRectAndRadius(
+          Rect.fromLTWH((cut - 2).clamp(0, size.width - 4), 0, 4, size.height), const Radius.circular(2));
+      canvas.drawRRect(markerRect, Paint()..color = marker);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TimelinePainter old) =>
+      old.position != position || old.segments.length != segments.length || old.marker != marker;
 }
 
 class _Segment {

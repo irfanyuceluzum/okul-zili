@@ -196,7 +196,11 @@ class _Banner extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(14)),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: background.withValues(alpha: 0.25), blurRadius: 18, offset: const Offset(0, 6))],
+        ),
         child: Row(
           children: [
             Icon(icon, color: foreground),
@@ -275,73 +279,175 @@ class _NowCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = day.statusAt(now);
-    final colors = PeriodColors.of(status.kind);
+    final g = PeriodGradient.of(status.kind);
+    final fg = g.foreground;
     final range = status.startsAt != null && status.endsAt != null
         ? '${_hm(status.startsAt!)} – ${_hm(status.endsAt!)} · '
             '${status.endsAt!.difference(status.startsAt!).inMinutes} dakika'
         : null;
     final remaining = status.endsAt?.difference(now);
+    final progress = status.progressAt(now);
 
-    return Container(
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(color: colors.tint, borderRadius: BorderRadius.circular(20)),
-      child: DefaultTextStyle.merge(
-        style: TextStyle(color: colors.text),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.end,
-              spacing: 24,
-              runSpacing: 16,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const _Eyebrow('Şu an'),
-                    Text(
-                      status.title,
-                      style: TextStyle(fontSize: status.title.length > 12 ? 44 : 64, fontWeight: FontWeight.w700, height: 1.05),
-                    ),
-                    if (range != null) Text(range, style: const TextStyle(fontSize: 17)),
-                  ],
-                ),
-                if (remaining != null && status.untilLabel != null)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        gradient: g.gradient,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: g.colors.first.withValues(alpha: 0.32), blurRadius: 32, offset: const Offset(0, 14))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // Hafif süs: köşede büyük, saydam daireler.
+          Positioned(right: -80, top: -90, child: _Glow(size: 280, color: fg.withValues(alpha: 0.07))),
+          Positioned(left: -60, bottom: -110, child: _Glow(size: 220, color: fg.withValues(alpha: 0.05))),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(32, 28, 32, 26),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(color: fg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 24,
+                    runSpacing: 16,
                     children: [
-                      _Eyebrow('${status.untilLabel} kalan'),
-                      Text(
-                        formatCountdown(remaining),
-                        style: const TextStyle(fontSize: 64, fontWeight: FontWeight.w600, height: 1.05, fontFeatures: tabularFigures),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: g.soft, borderRadius: BorderRadius.circular(20)),
+                            child: const _Eyebrow('Şu an'),
+                          ),
+                          const SizedBox(height: 10),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 350),
+                            child: Text(
+                              status.title,
+                              key: ValueKey(status.title),
+                              style: TextStyle(
+                                fontSize: status.title.length > 12 ? 44 : 60,
+                                fontWeight: FontWeight.w700,
+                                height: 1.05,
+                                letterSpacing: -1,
+                                color: fg,
+                              ),
+                            ),
+                          ),
+                          if (range != null) ...[
+                            const SizedBox(height: 6),
+                            Text(range, style: TextStyle(fontSize: 17, color: fg.withValues(alpha: 0.85))),
+                          ],
+                        ],
                       ),
+                      if (remaining != null && status.untilLabel != null)
+                        _CountdownRing(
+                          label: '${status.untilLabel} kalan',
+                          value: formatCountdown(remaining),
+                          progress: progress ?? 0,
+                          color: fg,
+                          track: g.soft,
+                        ),
                     ],
                   ),
-              ],
-            ),
-            if (day.isSchoolDay) ...[
-              const SizedBox(height: 28),
-              DayTimeline(day: day, now: now),
-              const SizedBox(height: 12),
-              const Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  LegendDot(AppColors.lesson, 'Ders'),
-                  LegendDot(AppColors.recess, 'Teneffüs'),
-                  LegendDot(AppColors.lunch, 'Öğle arası'),
-                  LegendDot(AppColors.assembly, 'Toplanma'),
+                  if (day.isSchoolDay) ...[
+                    const SizedBox(height: 24),
+                    DayTimeline(day: day, now: now, onColor: fg),
+                  ],
                 ],
               ),
-            ],
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _Glow extends StatelessWidget {
+  const _Glow({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) =>
+      Container(width: size, height: size, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
+}
+
+/// Kalan süre: geçen kısmı dolan halka ve ortasında geri sayım.
+class _CountdownRing extends StatelessWidget {
+  const _CountdownRing({required this.label, required this.value, required this.progress, required this.color, required this.track});
+
+  final String label;
+  final String value;
+  final double progress;
+  final Color color;
+  final Color track;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 200,
+        height: 200,
+        child: CustomPaint(
+          painter: _RingPainter(progress: progress, color: color, track: track),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Text(
+                    label.toUpperCase(),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: color.withValues(alpha: 0.85)),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(fontSize: 44, fontWeight: FontWeight.w700, height: 1.05, fontFeatures: tabularFigures, color: color),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+class _RingPainter extends CustomPainter {
+  _RingPainter({required this.progress, required this.color, required this.track});
+
+  final double progress;
+  final Color color;
+  final Color track;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 10.0;
+    final rect = (Offset.zero & size).deflate(stroke / 2);
+    canvas.drawArc(rect, 0, 6.2832, false, Paint()
+      ..color = track
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke);
+    final sweep = 6.2832 * progress.clamp(0.0, 1.0);
+    if (sweep > 0) {
+      canvas.drawArc(rect, -1.5708, sweep, false, Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = stroke);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) => old.progress != progress || old.color != color || old.track != track;
 }
 
 class _Eyebrow extends StatelessWidget {
@@ -352,7 +458,7 @@ class _Eyebrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         text.toUpperCase(),
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 1),
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.2),
       );
 }
 
@@ -368,7 +474,7 @@ class _InfoCards extends StatelessWidget {
     final next = this.next;
     final holiday = controller.nextHoliday();
     final nextCard = _InfoCard(
-      icon: Icons.notifications_outlined,
+      icon: Icons.notifications_active_outlined,
       label: 'Sıradaki zil',
       value: next == null ? '—' : next.bell.time.toString(),
       detail: next == null
@@ -381,7 +487,9 @@ class _InfoCards extends StatelessWidget {
     );
     final today = dateOnly(now);
     final holidayCard = _InfoCard(
-      icon: Icons.event_outlined,
+      icon: Icons.beach_access_outlined,
+      tint: AppColors.okTint,
+      accent: AppColors.ok,
       label: 'Sonraki tatil',
       value: holiday == null ? '—' : '${holiday.start.day} ${turkishMonths[holiday.start.month - 1]}',
       detail: holiday == null
@@ -405,30 +513,43 @@ class _InfoCards extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.icon, required this.label, required this.value, required this.detail});
+  const _InfoCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.detail,
+    this.tint = AppColors.lessonTint,
+    this.accent = AppColors.lesson,
+  });
 
   final IconData icon;
+  final Color tint;
+  final Color accent;
   final String label;
   final String value;
   final String detail;
 
   @override
-  Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Icon(icon, size: 16, color: AppColors.inkSecondary),
-                const SizedBox(width: 8),
-                Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.inkSecondary)),
-              ]),
-              const SizedBox(height: 8),
-              Text(value, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, fontFeatures: tabularFigures)),
-              Text(detail, style: const TextStyle(fontSize: 15, color: AppColors.inkSecondary)),
-            ],
-          ),
+  Widget build(BuildContext context) => AppCard(
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            IconBadge(icon, background: tint, foreground: accent, size: 44),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.inkSecondary)),
+                  const SizedBox(height: 2),
+                  Text(value,
+                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.5, fontFeatures: tabularFigures)),
+                  Text(detail, style: const TextStyle(fontSize: 14, color: AppColors.inkSecondary, height: 1.35)),
+                ],
+              ),
+            ),
+          ],
         ),
       );
 }
@@ -457,6 +578,7 @@ class _QuickActions extends StatelessWidget {
     final c = controller;
     return SectionCard(
       title: 'Hızlı işlemler',
+      icon: Icons.bolt_rounded,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -542,10 +664,11 @@ class _QuickActions extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 16),
-          Wrap(
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFFFFF7F7), borderRadius: BorderRadius.circular(16)),
+            child: Wrap(
             spacing: 16,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -558,6 +681,7 @@ class _QuickActions extends StatelessWidget {
               ),
               const Text('Yanlışlıkla çalmasın diye 2 saniye basılı tutun.', style: TextStyle(fontSize: 13, color: AppColors.inkSecondary)),
             ],
+          ),
           ),
         ],
       ),
@@ -577,15 +701,16 @@ class _TodayBells extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lastLog = controller.logs.firstOrNull;
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 16, 12),
+            padding: const EdgeInsets.fromLTRB(24, 22, 16, 14),
             child: Row(
               children: [
+                const IconBadge(Icons.schedule_rounded),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,7 +743,7 @@ class _TodayBells extends StatelessWidget {
             for (final bell in day.bells) _BellRow(bell: bell, day: day, now: now, next: next, outcome: controller.outcomeOf(day, bell)),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.line))),
+            decoration: const BoxDecoration(color: AppColors.ground),
             child: Text(
               lastLog == null
                   ? 'Henüz kayıt yok'
@@ -657,13 +782,12 @@ class _BellRow extends StatelessWidget {
     };
     return Container(
       constraints: const BoxConstraints(minHeight: 40),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      margin: EdgeInsets.symmetric(horizontal: 12, vertical: isNext ? 4 : 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: isNext ? AppColors.lessonTint : null,
-        border: Border(
-          top: const BorderSide(color: AppColors.lineSoft),
-          left: BorderSide(color: isNext ? AppColors.lesson : Colors.transparent, width: 4),
-        ),
+        borderRadius: BorderRadius.circular(12),
+        border: isNext ? Border.all(color: AppColors.lesson.withValues(alpha: 0.25)) : null,
       ),
       child: Row(
         children: [
