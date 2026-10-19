@@ -113,10 +113,15 @@ void main() {
       expect(player.plays.single.id, 'zil', reason: 'acil durum kipi zilleri bekletmiyor');
     });
 
-    test('yerleşik sesler silinmez', () async {
+    test('hazır ses listeden silinir ve geri getirilir', () async {
       final c = makeController(RecordingPlayer());
-      await c.deleteSound(c.config.soundById('zil')!);
-      expect(c.config.soundById('zil'), isNotNull);
+      await c.deleteSound(c.config.soundById('gong')!);
+      expect(c.config.soundById('gong'), isNull);
+      expect(c.missingBuiltInSounds.map((s) => s.id), ['gong']);
+      expect(c.config.soundForType[BellType.teacher], 'zil', reason: 'öğretmen zili klasik zile döner');
+      await c.restoreBuiltInSounds();
+      expect(c.config.sounds.first.id, 'gong');
+      expect(c.missingBuiltInSounds, isEmpty);
     });
   });
 

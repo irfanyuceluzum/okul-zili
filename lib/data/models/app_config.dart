@@ -256,13 +256,14 @@ class AppConfig {
     return id == null ? null : soundById(id);
   }
 
-  /// Zil için çalınacak sesi bulur: önce zile özel ses, sonra türün sesi,
-  /// en son listedeki ilk ses.
+  /// Zil için çalınacak sesi bulur: önce zile özel ses, sonra türün sesi.
+  /// Bulunamazsa null (çağıran yerleşik klasik zili çalar); listedeki ilk ses
+  /// alınmaz, yoksa zil yerine ör. İstiklal Marşı çalabilirdi.
   BellSound? soundFor(BellEvent bell) {
     final specific = bell.soundId == null ? null : soundById(bell.soundId!);
     if (specific != null) return specific;
     final byType = soundForType[bell.type];
-    return (byType == null ? null : soundById(byType)) ?? sounds.firstOrNull;
+    return byType == null ? null : soundById(byType);
   }
 
   Map<String, dynamic> toJson() => {

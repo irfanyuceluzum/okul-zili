@@ -9,6 +9,10 @@ abstract interface class BellPlayer {
   Future<void> play(BellSound sound, {required int volumePercent, bool loop = false});
   Future<void> stop();
 
+  /// Çalan sesi duraklatır; [resume] kaldığı yerden sürdürür.
+  Future<void> pause();
+  Future<void> resume();
+
   /// Döngüsüz çalan ses kendiliğinden bitince bildirir ([stop] ile kesilince değil).
   Stream<void> get completed;
 }
@@ -41,6 +45,12 @@ class AudioBellPlayer implements BellPlayer {
 
   @override
   Future<void> stop() => _enqueue(_player.stop);
+
+  @override
+  Future<void> pause() => _enqueue(_player.pause);
+
+  @override
+  Future<void> resume() => _enqueue(_player.resume);
 
   @override
   Stream<void> get completed => _player.onPlayerComplete;

@@ -124,25 +124,72 @@ class SoundsPage extends StatelessWidget {
   }
 
   Future<void> _delete(BuildContext context, BellSound sound) async {
+    final config = controller.config;
     final usages = controller.soundUsages(sound.id);
+    // Acil durum dışındaki zillerde kullanılıyorsa yerine çalacak ses seçilir.
+    final usedByBells = config.soundForType.entries.any((e) => e.value == sound.id && e.key != BellType.emergency);
+    final others = config.sounds.where((s) => s.id != sound.id).toList();
+    String? replacement = others.any((s) => s.id == AppController.fallbackBell.id)
+        ? AppController.fallbackBell.id
+        : others.firstOrNull?.id;
+    const muted = TextStyle(fontSize: 13, color: AppColors.inkSecondary);
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('"${sound.name}" silinsin mi?'),
-        content: Text(usages.isEmpty
-            ? 'Bu ses hiçbir yerde kullanılmıyor.'
-            : 'Şu yerlerde kullanılıyor: ${usages.join(', ')}. Silinirse bunlarda klasik zil çalar.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Vazgeç')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger, minimumSize: const Size(0, 44)),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sil'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('"${sound.name}" silinsin mi?'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(usages.isEmpty ? 'Bu ses hiçbir yerde kullanılmıyor.' : 'Şu yerlerde kullanılıyor: ${usages.join(', ')}.'),
+                if (usedByBells && others.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text('Bu zillerde yerine çalacak ses:', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: replacement,
+                          onChanged: (v) => setState(() => replacement = v),
+                          items: [for (final o in others) DropdownMenuItem(value: o.id, child: Text(o.name))],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (usedByBells && others.isEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Başka ses kalmadığı için zillerde uygulamanın içindeki klasik zil çalar.'),
+                ],
+                if (config.soundForType[BellType.emergency] == sound.id) ...[
+                  const SizedBox(height: 8),
+                  const Text('Acil durum alarmında siren çalar.', style: muted),
+                ],
+                if (sound.isAsset) ...[
+                  const SizedBox(height: 12),
+                  const Text('Hazır ses yalnız listeden kaldırılır; "Hazır sesleri geri getir" ile yeniden ekleyebilirsiniz.',
+                      style: muted),
+                ],
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Vazgeç')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.danger, minimumSize: const Size(0, 44)),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Sil'),
+            ),
+          ],
+        ),
       ),
     );
-    if (ok == true) await controller.deleteSound(sound);
+    if (ok == true) await controller.deleteSound(sound, replacementId: usedByBells ? replacement : null);
   }
 
   @override
@@ -179,8 +226,16 @@ class SoundsPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [assignments, const SizedBox(height: 24), ceremonies],
         );
+        final missing = controller.missingBuiltInSounds;
         final files = SectionCard(
           title: 'Ses dosyaları',
+          trailing: missing.isEmpty
+              ? null
+              : TextButton.icon(
+                  onPressed: controller.restoreBuiltInSounds,
+                  icon: const Icon(Icons.restore),
+                  label: const Text('Hazır sesleri geri getir'),
+                ),
           subtitle: 'Desteklenen biçimler: ${supportedAudioExtensions.join(', ')}. '
               'Dosya uygulamanın klasörüne kopyalanır; asıl dosyayı silseniz de zil çalar.',
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
@@ -188,11 +243,12 @@ class SoundsPage extends StatelessWidget {
             children: [
               for (final sound in config.sounds)
                 _SoundRow(
+                  controller: controller,
                   sound: sound,
                   usages: controller.soundUsages(sound.id),
                   onPreview: () => _preview(context, sound),
                   onRename: sound.isAsset ? null : () => _rename(context, sound),
-                  onDelete: sound.isAsset ? null : () => _delete(context, sound),
+                  onDelete: () => _delete(context, sound),
                 ),
             ],
           ),
@@ -266,9 +322,10 @@ class _AssignmentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final config = controller.config;
     final assigned = config.soundForType[type];
-    final current = config.soundById(assigned ?? '') ??
-        (type == BellType.emergency ? config.soundById('alarm') : null) ??
-        config.sounds.firstOrNull;
+    final current = config.soundById(assigned ?? '') ?? (type == BellType.emergency ? config.soundById('alarm') : null);
+    // Atanan ses listeden silinmişse uygulamanın içindeki yedek çalar.
+    final builtIn = type == BellType.emergency ? AppController.fallbackAlarm : AppController.fallbackBell;
+    final plays = current ?? builtIn;
     return Container(
       constraints: const BoxConstraints(minHeight: 60),
       decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lineSoft))),
@@ -284,21 +341,17 @@ class _AssignmentRow extends StatelessWidget {
               ],
             ),
           ),
-          if (current != null)
-            DropdownButton<String>(
-              value: current.id,
-              onChanged: (id) {
-                if (id != null) controller.setSoundForType(type, id);
-              },
-              items: [
-                for (final s in config.sounds) DropdownMenuItem(value: s.id, child: Text(s.name)),
-              ],
-            ),
-          IconButton(
-            tooltip: '${type.label} sesini dinle',
-            onPressed: current == null ? null : () => onPreview(current),
-            icon: const Icon(Icons.play_arrow_rounded, color: AppColors.lesson),
+          DropdownButton<String>(
+            value: current?.id,
+            hint: Text('${builtIn.name} (yerleşik)'),
+            onChanged: (id) {
+              if (id != null) controller.setSoundForType(type, id);
+            },
+            items: [
+              for (final s in config.sounds) DropdownMenuItem(value: s.id, child: Text(s.name)),
+            ],
           ),
+          PlaybackButtons(controller: controller, sound: plays, label: type.label, onPlay: () => onPreview(plays)),
         ],
       ),
     );
@@ -341,19 +394,48 @@ class _CeremonyRow extends StatelessWidget {
                 DropdownMenuItem<String?>(value: s.id, child: Text(s.name)),
             ],
           ),
-          IconButton(
-            tooltip: '${kind.label} dinle',
-            onPressed: current == null ? null : () => onPreview(current),
-            icon: const Icon(Icons.play_arrow_rounded, color: AppColors.lesson),
-          ),
+          if (current != null) PlaybackButtons(controller: controller, sound: current, label: kind.label, onPlay: () => onPreview(current)),
         ],
       ),
     );
   }
 }
 
+/// Sesin yanında oynat / duraklat-sürdür / durdur düğmeleri. [label] ipucu
+/// metinlerinde kullanılır (ör. "Giriş zili dinle").
+class PlaybackButtons extends StatelessWidget {
+  const PlaybackButtons({super.key, required this.controller, required this.sound, required this.label, required this.onPlay});
+
+  final AppController controller;
+  final BellSound sound;
+  final String label;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = controller.previewingSoundId == sound.id;
+    final playing = active && !controller.previewPaused;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: playing ? '$label duraklat' : (active ? '$label sürdür' : '$label dinle'),
+          onPressed: playing ? controller.pausePreview : (active ? controller.resumePreview : onPlay),
+          icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: AppColors.lesson),
+        ),
+        IconButton(
+          tooltip: '$label durdur',
+          onPressed: active ? controller.stopSound : null,
+          icon: Icon(Icons.stop_rounded, color: active ? AppColors.ink : AppColors.inkMuted),
+        ),
+      ],
+    );
+  }
+}
+
 class _SoundRow extends StatelessWidget {
   const _SoundRow({
+    required this.controller,
     required this.sound,
     required this.usages,
     required this.onPreview,
@@ -361,6 +443,7 @@ class _SoundRow extends StatelessWidget {
     required this.onDelete,
   });
 
+  final AppController controller;
   final BellSound sound;
   final List<String> usages;
   final VoidCallback onPreview;
@@ -374,12 +457,8 @@ class _SoundRow extends StatelessWidget {
       decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lineSoft))),
       child: Row(
         children: [
-          IconButton(
-            tooltip: '${sound.name} dinle',
-            onPressed: onPreview,
-            icon: const Icon(Icons.play_circle_outline, color: AppColors.lesson),
-          ),
-          const SizedBox(width: 4),
+          PlaybackButtons(controller: controller, sound: sound, label: sound.name, onPlay: onPreview),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

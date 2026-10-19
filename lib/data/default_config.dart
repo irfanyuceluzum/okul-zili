@@ -24,6 +24,14 @@ final normalDayTemplate = ScheduleTemplate(
 );
 
 /// İlk açılışta kullanılan ayarlar.
+/// Uygulamayla gelen sesler. Listeden silinebilir, Zil sesleri sayfasından
+/// geri getirilebilir; dosyaları uygulamanın içindedir.
+const builtInSounds = [
+  BellSound(id: 'zil', name: 'Klasik zil', path: 'sounds/zil.wav', isAsset: true),
+  BellSound(id: 'gong', name: 'Ding-dong', path: 'sounds/gong.wav', isAsset: true),
+  BellSound(id: 'alarm', name: 'Siren', path: 'sounds/alarm.wav', isAsset: true),
+];
+
 AppConfig createDefaultConfig() => AppConfig(
       schoolName: '',
       templates: [normalDayTemplate],
@@ -34,11 +42,7 @@ AppConfig createDefaultConfig() => AppConfig(
         DateTime.thursday: 'normal',
         DateTime.friday: 'normal',
       },
-      sounds: const [
-        BellSound(id: 'zil', name: 'Klasik zil', path: 'sounds/zil.wav', isAsset: true),
-        BellSound(id: 'gong', name: 'Ding-dong', path: 'sounds/gong.wav', isAsset: true),
-        BellSound(id: 'alarm', name: 'Siren', path: 'sounds/alarm.wav', isAsset: true),
-      ],
+      sounds: builtInSounds,
       soundForType: const {
         BellType.assembly: 'zil',
         BellType.teacher: 'gong',

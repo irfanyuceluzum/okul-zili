@@ -11,6 +11,7 @@ import 'core/scheduler/bell_log.dart';
 import 'core/scheduler/bell_scheduler.dart';
 import 'core/scheduler/day_schedule.dart';
 import 'data/config_repository.dart';
+import 'data/default_config.dart';
 import 'data/models/app_config.dart';
 import 'data/models/bell_event.dart';
 import 'data/models/calendar.dart';
@@ -54,10 +55,11 @@ class AppController extends ChangeNotifier {
       tolerance: Duration(seconds: config.lateToleranceSeconds),
       now: _now,
     );
-    _completedSub = player.completed.listen((_) => _endCeremony());
+    _completedSub = player.completed.listen((_) => _onCompleted());
   }
 
-  static const _fallbackAlarm =
+  /// Acil durum sesi bulunamazsa çalan yerleşik siren.
+  static const fallbackAlarm =
       BellSound(id: 'alarm', name: 'Siren', path: 'sounds/alarm.wav', isAsset: true);
 
   /// Yüklenen ses çalınamazsa yerine çalan yerleşik zil.
@@ -110,6 +112,26 @@ class AppController extends ChangeNotifier {
 
   bool _emergencyActive = false;
   bool get emergencyActive => _emergencyActive;
+
+  /// Zil sesleri sayfasında dinlenen ses; başka bir şey çalınca ya da ses
+  /// bitince null olur.
+  String? _previewId;
+  bool _previewPaused = false;
+  String? get previewingSoundId => _previewId;
+  bool get previewPaused => _previewPaused;
+
+  void _clearPreview() {
+    if (_previewId == null) return;
+    _previewId = null;
+    _previewPaused = false;
+    notifyListeners();
+  }
+
+  /// Ses kendiliğinden bitti: dinleme ve tören durumu kalkar.
+  void _onCompleted() {
+    _clearPreview();
+    _endCeremony();
+  }
 
   /// Şu an çalan tören kaydı (İstiklal Marşı vb.); yoksa null.
   Ceremony? _ceremony;
@@ -206,6 +228,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> stopSound() async {
     await player.stop();
+    _clearPreview();
     _endCeremony();
     if (_emergencyActive) {
       _emergencyActive = false;
@@ -241,6 +264,8 @@ class AppController extends ChangeNotifier {
     // Acil durum her şeyden önce gelir; çalan tören kaydı siren ile kesilir.
     _ceremonyGuard?.cancel();
     _ceremony = null;
+    _previewId = null;
+    _previewPaused = false;
     _emergencyActive = true;
     notifyListeners();
     final bell = BellEvent(
@@ -255,7 +280,7 @@ class AppController extends ChangeNotifier {
       // o zaman ilk ses (klasik zil) değil siren çalsın.
       final sound = (_config.soundForType.containsKey(BellType.emergency) ? _config.soundFor(bell) : null) ??
           _config.soundById('alarm') ??
-          _fallbackAlarm;
+          fallbackAlarm;
       final note = await _playWithFallback(sound, loop: true);
       _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.played, detail: note));
     } catch (e) {
@@ -288,6 +313,8 @@ class AppController extends ChangeNotifier {
     );
     // Önceki bir zilin süreli durdurucusu marşı kesmesin.
     _playId++;
+    _previewId = null;
+    _previewPaused = false;
     _ceremony = kind;
     _ceremonyGuard?.cancel();
     _ceremonyGuard = Timer(maxCeremony, _endCeremony);
@@ -616,7 +643,26 @@ class AppController extends ChangeNotifier {
     if (_emergencyActive) return 'Acil durum alarmı çalarken ses dinletilemez';
     if (_ceremony != null) return '${_ceremony!.label} çalarken ses dinletilemez';
     _ensureAudible(_config.volumePercent);
+    _previewId = sound.id;
+    _previewPaused = false;
+    notifyListeners();
     return _playWithFallback(sound, loop: stopAfter != null, stopAfter: stopAfter);
+  }
+
+  /// Dinlenen sesi duraklatır.
+  Future<void> pausePreview() async {
+    if (_previewId == null || _previewPaused) return;
+    await player.pause();
+    _previewPaused = true;
+    notifyListeners();
+  }
+
+  /// Duraklatılan sesi kaldığı yerden sürdürür.
+  Future<void> resumePreview() async {
+    if (_previewId == null || !_previewPaused) return;
+    await player.resume();
+    _previewPaused = false;
+    notifyListeners();
   }
 
   /// Ses dosyasını uygulamanın klasörüne kopyalayıp listeye ekler; böylece
@@ -708,7 +754,7 @@ class AppController extends ChangeNotifier {
         if (remembrance != null &&
             ev.id == '10-kasim' &&
             ev.soundId != remembrance &&
-            (ev.soundId == null || ev.soundId == _fallbackAlarm.id))
+            (ev.soundId == null || ev.soundId == fallbackAlarm.id))
           () {
             eventUpdated = true;
             return ev.copyWith(soundId: () => remembrance, loopSeconds: () => null);
@@ -779,20 +825,30 @@ class AppController extends ChangeNotifier {
           s.id == sound.id ? BellSound(id: s.id, name: name, path: s.path, isAsset: s.isAsset) : s,
       ]));
 
-  /// Yüklenen sesi siler; kullanıldığı zil türleri klasik zile, etkinlikler
-  /// varsayılan etkinlik sesine döner. Yerleşik sesler silinmez.
-  Future<void> deleteSound(BellSound sound) async {
-    if (sound.isAsset) return;
-    await updateConfig(_config.copyWith(
-      sounds: _config.sounds.where((s) => s.id != sound.id).toList(),
-      soundForType: {
-        for (final e in _config.soundForType.entries)
-          e.key: e.value != sound.id
-              ? e.value
-              : e.key == BellType.emergency
-                  ? _fallbackAlarm.id
-                  : fallbackBell.id,
-      },
+  /// Sesi listeden kaldırır (yüklenen sesin dosyası da silinir). Kullanıldığı
+  /// zil türleri [replacementId] sesine, verilmezse klasik zile (acil durum
+  /// sirene) döner; etkinlikler varsayılan etkinlik sesine döner, tören
+  /// ataması kalkar. Hazır sesler [restoreBuiltInSounds] ile geri gelir.
+  Future<void> deleteSound(BellSound sound, {String? replacementId}) async {
+    final remaining = _config.sounds.where((s) => s.id != sound.id).toList();
+    bool has(String? id) => id != null && remaining.any((s) => s.id == id);
+    final types = <BellType, String>{};
+    for (final e in _config.soundForType.entries) {
+      if (e.value != sound.id) {
+        types[e.key] = e.value;
+        continue;
+      }
+      final preferred = e.key == BellType.emergency ? fallbackAlarm.id : fallbackBell.id;
+      // Acil durum her zaman sirene döner; seçilen yedek ses yalnız zillere.
+      final chosen = e.key != BellType.emergency && has(replacementId) ? replacementId : null;
+      final pick = chosen ?? (has(preferred) ? preferred : null);
+      // Uygun ses kalmadıysa atama kalkar: zil yerleşik klasik zile, acil
+      // durum yerleşik sirene düşer (dosyaları uygulamanın içinde).
+      if (pick != null) types[e.key] = pick;
+    }
+    final ok = await updateConfig(_config.copyWith(
+      sounds: remaining,
+      soundForType: types,
       specialEvents: [
         for (final ev in _config.specialEvents) ev.soundId == sound.id ? ev.copyWith(soundId: () => null) : ev,
       ],
@@ -801,10 +857,20 @@ class AppController extends ChangeNotifier {
           if (e.value != sound.id) e.key: e.value,
       },
     ));
+    // Kilitliyken ya da kayıt başarısızsa dosya silinmez; ayar hâlâ ona bağlı.
+    if (!ok || sound.isAsset) return;
     try {
       File(sound.path).deleteSync();
     } catch (_) {}
   }
+
+  /// Listeden silinmiş hazır sesler.
+  List<BellSound> get missingBuiltInSounds =>
+      builtInSounds.where((b) => _config.soundById(b.id) == null).toList();
+
+  /// Silinmiş hazır sesleri listenin başına geri ekler.
+  Future<void> restoreBuiltInSounds() =>
+      updateConfig(_config.copyWith(sounds: [...missingBuiltInSounds, ..._config.sounds]));
 
   Future<void> setSoundForType(BellType type, String soundId) =>
       updateConfig(_config.copyWith(soundForType: {..._config.soundForType, type: soundId}));
@@ -885,6 +951,8 @@ class AppController extends ChangeNotifier {
   // ---- İç işleyiş ---------------------------------------------------------
 
   Future<String?> _ring(BellEvent bell) async {
+    // Zil, dinlenen sesi keser.
+    _clearPreview();
     _ensureAudible(_config.volumePercent);
     return _playWithFallback(
       _config.soundFor(bell) ?? fallbackBell,

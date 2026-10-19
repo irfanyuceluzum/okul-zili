@@ -23,6 +23,12 @@ class SilentPlayer implements BellPlayer {
   Future<void> stop() async {}
 
   @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> resume() async {}
+
+  @override
   Stream<void> get completed => const Stream.empty();
 }
 
@@ -53,6 +59,15 @@ class RecordingPlayer implements BellPlayer {
 
   @override
   Future<void> stop() async => stops++;
+
+  int pauses = 0;
+  int resumes = 0;
+
+  @override
+  Future<void> pause() async => pauses++;
+
+  @override
+  Future<void> resume() async => resumes++;
 
   final _completed = StreamController<void>.broadcast(sync: true);
 
