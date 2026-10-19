@@ -5,7 +5,7 @@
 ; GitHub Actions'ta derlenir: .github/workflows/windows.yml
 
 #ifndef MyAppVersion
-  #define MyAppVersion "0.6.0"
+  #define MyAppVersion "0.7.0"
 #endif
 #define MyAppName "Okul Zili"
 #define MyAppDeveloper "İrfan Yücel ÜZÜM"

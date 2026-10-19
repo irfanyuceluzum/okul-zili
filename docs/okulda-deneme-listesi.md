@@ -1,12 +1,12 @@
-# Okul bilgisayarında elle deneme listesi (sürüm 0.6.0)
+# Okul bilgisayarında elle deneme listesi (sürüm 0.7.0)
 
 Bu maddeler yalnız Windows'ta denenebilir; Mac'teki otomatik testler bunları
 kapsamaz. Her maddenin yanına ✔ ya da sorunu yazın. Sorun çıkarsa
 **Kayıtlar** sayfasının ekran görüntüsünü ve ayar klasöründeki
 `hata_kayitlari.log` dosyasını saklayın.
 
-Kurulum dosyası: GitHub → Releases → **Okul Zili 0.6.0** →
-`OkulZili-Kurulum-0.6.0.exe` (https://github.com/irfanyuceluzum/okul-zili/releases/tag/v0.6.0).
+Kurulum dosyası: GitHub → Releases → **Okul Zili 0.7.0** →
+`OkulZili-Kurulum-0.7.0.exe` (https://github.com/irfanyuceluzum/okul-zili/releases/tag/v0.7.0).
 
 ## 1. Kurulum ve güncelleme
 - [ ] Önceki sürüm kuruluyken yeni kurulum dosyası açılınca çalışan Okul Zili kendiliğinden kapanıyor, kurulum hatasız bitiyor.
