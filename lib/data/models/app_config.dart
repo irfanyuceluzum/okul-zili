@@ -3,6 +3,7 @@ import 'bell_event.dart';
 import '../../core/date_utils.dart';
 import 'calendar.dart';
 import 'lock_settings.dart';
+import 'spoken_announcement.dart';
 import 'notices.dart';
 import 'schedule_template.dart';
 
@@ -65,6 +66,7 @@ class AppConfig {
     this.panoIdleMinutes = 3,
     this.lock,
     this.ceremonySounds = const {},
+    this.spokenAnnouncements = const [],
   });
 
   /// Ayar dosyasını okur. Tek tek okunamayan kayıtlar (bir tatil, bir
@@ -153,6 +155,7 @@ class AppConfig {
       panoIdleMinutes: _int(json['panoIdleMinutes']) ?? 3,
       lock: lock,
       ceremonySounds: ceremonySounds,
+      spokenAnnouncements: list(json['spokenAnnouncements'], SpokenAnnouncement.fromJson, 'anons'),
     );
     if (skipped.isNotEmpty) {
       warnings?.add('Okunamayan kayıtlar atlandı: ${skipped.entries.map((e) => '${e.value} ${e.key}').join(', ')}.');
@@ -199,6 +202,9 @@ class AppConfig {
   /// gelmez (telif), okul kendisi yükler.
   final Map<Ceremony, String> ceremonySounds;
 
+  /// Sesli anonslar (dosya, mikrofon kaydı ya da yazıdan okuma).
+  final List<SpokenAnnouncement> spokenAnnouncements;
+
   AppConfig copyWith({
     String? schoolName,
     List<ScheduleTemplate>? templates,
@@ -215,6 +221,7 @@ class AppConfig {
     int? panoIdleMinutes,
     LockSettings? Function()? lock,
     Map<Ceremony, String>? ceremonySounds,
+    List<SpokenAnnouncement>? spokenAnnouncements,
   }) =>
       AppConfig(
         schoolName: schoolName ?? this.schoolName,
@@ -232,6 +239,7 @@ class AppConfig {
         panoIdleMinutes: panoIdleMinutes ?? this.panoIdleMinutes,
         lock: lock != null ? lock() : this.lock,
         ceremonySounds: ceremonySounds ?? this.ceremonySounds,
+        spokenAnnouncements: spokenAnnouncements ?? this.spokenAnnouncements,
       );
 
   /// [now] gününde panoda gösterilecek duyurular: açık, süresi dolmamış, metni dolu.
@@ -250,6 +258,8 @@ class AppConfig {
 
   BellSound? soundById(String id) =>
       sounds.where((s) => s.id == id).firstOrNull;
+
+  SpokenAnnouncement? announcementById(String id) => spokenAnnouncements.where((a) => a.id == id).firstOrNull;
 
   BellSound? ceremonySound(Ceremony kind) {
     final id = ceremonySounds[kind];
@@ -288,5 +298,6 @@ class AppConfig {
         if (lock != null) 'lock': lock!.toJson(),
         if (ceremonySounds.isNotEmpty)
           'ceremonySounds': {for (final e in ceremonySounds.entries) e.key.name: e.value},
+        if (spokenAnnouncements.isNotEmpty) 'spokenAnnouncements': spokenAnnouncements.map((a) => a.toJson()).toList(),
       };
 }

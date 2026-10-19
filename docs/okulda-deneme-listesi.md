@@ -36,6 +36,14 @@ Kurulum dosyası: GitHub → Releases → **Okul Zili 0.6.0** →
 - [ ] Marş bir zil saatine denk gelince zil marşı kesmiyor, marş bitince çalıyor (Kayıtlar'da görünür).
 - [ ] 10 Kasım etkinliği (Özel etkinlikler) saygı duruşu kaydını çalacak şekilde görünüyor; "Dinle" ile denendi.
 
+## 3b. Zil sesleri ve anonslar
+- [ ] Zil sesleri'nde bir sesin yanındaki oynat / duraklat / sürdür / durdur düğmeleri çalışıyor.
+- [ ] Hazır bir ses (ör. Ding-dong) silinebiliyor; "Hazır sesleri geri getir" ile geri geliyor.
+- [ ] Anonslar → "Yazıdan okut": Türkçe ses uyarısı çıkmıyor (çıkarsa Türkçe konuşma sesi yüklendi); "Dinle" anlaşılır Türkçe okuyor.
+- [ ] Anonslar → "Mikrofondan kaydet": kayıt alınıyor, "Dinle" ile duyuluyor, kaydedilince listede görünüyor.
+- [ ] Ana ekran → Anons: ding-dong + anons hoparlörden çalıyor; "Anonsu durdur" kesiyor.
+- [ ] Özel etkinlik ses olarak bir anons seçilince saatinde kendiliğinden yapılıyor.
+
 ## 4. Pano modu
 - [ ] 3 dk dokunulmayınca pano açılıyor (yazı alanında imleç ya da açık pencere yokken).
 - [ ] Duyuru bandı akıyor, bugünün nöbetçileri görünüyor; projeksiyon/TV çözünürlüğünde yazılar taşmıyor.

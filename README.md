@@ -33,6 +33,19 @@ Uygulama yalnız kendi yerleşik seslerini (klasik zil, ding-dong, siren) içeri
 Tören kaydı çalarken saati gelen zil marşı kesmez; kayıt bitince (gecikme
 toleransı içindeyse) çalar.
 
+## Sesli anonslar
+
+**Anonslar** sayfasından üç yolla anons eklenir: hazır ses dosyası, bilgisayarın
+mikrofonundan kayıt ya da yazıdan okuma. Her anonsta önce ding-dong çalması
+seçilebilir. Anons ana ekrandaki **Anons** düğmesinden yapılır ya da Özel
+etkinlikler'de ses olarak seçilip belirli saatte kendiliğinden yapılır.
+
+- Yazıdan okuma Windows'un konuşma sesini kullanır (PowerShell ile, ek program
+  gerekmez); Türkçe ses yoksa **Ayarlar → Saat ve dil → Konuşma → Ses ekle**
+  ile "Türkçe" yüklenmelidir.
+- Mikrofon kaydı için **Ayarlar → Gizlilik ve güvenlik → Mikrofon** bölümünde
+  masaüstü uygulamalarının mikrofona erişimi açık olmalıdır.
+
 ## Geliştirme
 
 Geliştirme Mac'te macOS hedefiyle yapılır. Windows'a özgü kısımlar

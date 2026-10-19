@@ -74,6 +74,7 @@ class SpecialEvent {
     this.month,
     this.day,
     this.loopSeconds,
+    this.announcementId,
   }) : date = date == null ? null : dateOnly(date);
 
   factory SpecialEvent.fromJson(Map<String, dynamic> json) => SpecialEvent(
@@ -92,6 +93,7 @@ class SpecialEvent {
         month: (json['month'] as num?)?.toInt(),
         day: (json['day'] as num?)?.toInt(),
         loopSeconds: (json['loopSeconds'] as num?)?.toInt(),
+        announcementId: json['announcementId'] as String?,
       );
 
   final String id;
@@ -114,7 +116,16 @@ class SpecialEvent {
   /// Doluysa ses bu kadar saniye tekrarlanır (ör. 10 Kasım sireni).
   final int? loopSeconds;
 
-  SpecialEvent copyWith({bool? enabled, String? Function()? soundId, int? Function()? loopSeconds}) => SpecialEvent(
+  /// Doluysa ses yerine bu sesli anons yapılır.
+  final String? announcementId;
+
+  SpecialEvent copyWith({
+    bool? enabled,
+    String? Function()? soundId,
+    int? Function()? loopSeconds,
+    String? Function()? announcementId,
+  }) =>
+      SpecialEvent(
         id: id,
         name: name,
         time: time,
@@ -126,6 +137,7 @@ class SpecialEvent {
         month: month,
         day: day,
         loopSeconds: loopSeconds == null ? this.loopSeconds : loopSeconds(),
+        announcementId: announcementId == null ? this.announcementId : announcementId(),
       );
 
   bool occursOn(DateTime d) => switch (recurrence) {
@@ -141,6 +153,7 @@ class SpecialEvent {
         label: name,
         soundId: soundId,
         loopSeconds: loopSeconds,
+        announcementId: announcementId,
       );
 
   Map<String, dynamic> toJson() => {
@@ -155,5 +168,6 @@ class SpecialEvent {
         'month': month,
         'day': day,
         'loopSeconds': loopSeconds,
+        if (announcementId != null) 'announcementId': announcementId,
       };
 }

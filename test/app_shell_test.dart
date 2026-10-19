@@ -40,6 +40,8 @@ void main() {
       repository: ConfigRepository(File('${tmp.path}/config.json')),
       player: SilentPlayer(),
       now: () => now,
+      speech: FakeSpeech(),
+      recorder: FakeRecorder(),
     );
     final navigation = ValueNotifier(AppPage.home);
     await tester.pumpWidget(OkulZiliApp(

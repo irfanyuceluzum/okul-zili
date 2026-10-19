@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import 'core/clock_time.dart';
@@ -17,12 +19,15 @@ import 'data/models/bell_event.dart';
 import 'data/models/calendar.dart';
 import 'data/models/lock_settings.dart';
 import 'data/models/notices.dart';
+import 'data/models/spoken_announcement.dart';
 import 'data/schedule_draft.dart';
 import 'platform/audio_file_picker.dart';
 import 'platform/bell_player.dart';
 import 'platform/config_file_picker.dart';
 import 'platform/error_log.dart';
+import 'platform/speech.dart';
 import 'platform/system_services.dart';
+import 'platform/voice_recorder.dart';
 
 /// Ayarları, zamanlayıcıyı, ses çaları ve işletim sistemi servislerini bir
 /// araya getirir; arayüz bunu dinler.
@@ -38,7 +43,11 @@ class AppController extends ChangeNotifier {
     ConfigFilePicker? pickConfigFile,
     ExportPathPicker? pickExportPath,
     PasswordHasher? passwordHasher,
+    SpeechSynthesizer? speech,
+    VoiceRecorder? recorder,
   })  : _config = config,
+        speech = speech ?? const SystemSpeechSynthesizer(),
+        recorder = recorder ?? MicVoiceRecorder(),
         pickAudioFile = pickAudioFile ?? pickAudioFileWithDialog,
         pickSoundFolder = pickSoundFolder ?? pickSoundFolderWithDialog,
         pickConfigFile = pickConfigFile ?? pickConfigFileWithDialog,
@@ -51,7 +60,7 @@ class AppController extends ChangeNotifier {
       ring: _ring,
       onLog: _onLog,
       holdReason: () => _emergencyActive ? 'Acil durum alarmı sürüyor' : null,
-      deferWhile: () => _ceremony != null,
+      deferWhile: () => _ceremony != null || _announcement != null,
       tolerance: Duration(seconds: config.lateToleranceSeconds),
       now: _now,
     );
@@ -71,6 +80,12 @@ class AppController extends ChangeNotifier {
 
   /// Ses paketi klasörü seçme penceresi (testlerde sahtesiyle değiştirilir).
   final SoundFolderPicker pickSoundFolder;
+
+  /// Yazıyı ses dosyasına çevirir (anonslar için).
+  final SpeechSynthesizer speech;
+
+  /// Mikrofondan anons kaydı.
+  final VoiceRecorder recorder;
 
   /// Açılacak ayar dosyasını seçtirir (vazgeçilirse null).
   final ConfigFilePicker pickConfigFile;
@@ -131,6 +146,14 @@ class AppController extends ChangeNotifier {
   void _onCompleted() {
     _clearPreview();
     _endCeremony();
+    final a = _announcement;
+    if (a == null) return;
+    if (!_announcementBody) {
+      // Dikkat sesi bitti; anonsun kendisi başlar.
+      unawaited(_startAnnouncementBody());
+    } else {
+      _endAnnouncement();
+    }
   }
 
   /// Şu an çalan tören kaydı (İstiklal Marşı vb.); yoksa null.
@@ -222,7 +245,7 @@ class AppController extends ChangeNotifier {
 
   /// Acil durum alarmı çalarken zil çalınmaz; alarmı kesmesin.
   Future<void> ringNow() async {
-    if (_emergencyActive || _ceremony != null) return;
+    if (_emergencyActive || _ceremony != null || _announcement != null) return;
     await _scheduler.ringNow();
   }
 
@@ -230,6 +253,7 @@ class AppController extends ChangeNotifier {
     await player.stop();
     _clearPreview();
     _endCeremony();
+    await _stopAnnouncement();
     if (_emergencyActive) {
       _emergencyActive = false;
       notifyListeners();
@@ -261,7 +285,8 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> startEmergency() async {
-    // Acil durum her şeyden önce gelir; çalan tören kaydı siren ile kesilir.
+    // Acil durum her şeyden önce gelir; çalan tören kaydı ve anons siren ile kesilir.
+    await _stopAnnouncement();
     _ceremonyGuard?.cancel();
     _ceremony = null;
     _previewId = null;
@@ -298,6 +323,8 @@ class AppController extends ChangeNotifier {
   Future<String?> startCeremony(Ceremony kind) async {
     if (_emergencyActive) return 'Acil durum alarmı çalarken tören kaydı çalınamaz.';
     final sound = _config.ceremonySound(kind);
+    // Tören anonsu keser.
+    await _stopAnnouncement();
     if (sound == null) {
       return '"${kind.label}" kaydı yüklenmemiş. Zil sesleri sayfasında "Ses paketi yükle…" ile yükleyin.';
     }
@@ -337,6 +364,295 @@ class AppController extends ChangeNotifier {
     _ceremonyGuard = null;
     _ceremony = null;
     notifyListeners();
+  }
+
+  // ---- Sesli anonslar -----------------------------------------------------
+
+  /// Şu an yapılan anons; yoksa null.
+  SpokenAnnouncement? _announcement;
+  SpokenAnnouncement? get announcementPlaying => _announcement;
+
+  /// Dikkat sesi bitti, anonsun kendisi çalıyor.
+  bool _announcementBody = false;
+  bool _announcementPaused = false;
+  bool get announcementPaused => _announcementPaused;
+
+  /// Durdurulan anonsun geç biten hazırlığı yeni anonsu başlatmasın diye.
+  int _announcementToken = 0;
+
+  /// Çalınacak anons dosyası (yazıdan okumada sese çevrilirken hazırlanır).
+  Future<String>? _announcementFile;
+
+  /// Hazırlık sürerken duraklatıldıysa, sürdürülünce çalınacak dosya.
+  String? _pendingAnnouncementPath;
+  Timer? _announcementGuard;
+  Timer? _chimeGuard;
+
+  /// Anonstan önce çalan dikkat sesi (uygulamanın içindeki ding-dong).
+  static const chimeSound = BellSound(id: 'gong', name: 'Ding-dong', path: 'sounds/gong.wav', isAsset: true);
+
+  /// Dikkat sesinin bitiş bildirimi gelmezse anons en geç bu kadar sonra başlar.
+  static const chimeMax = Duration(seconds: 8);
+
+  int get _playerVolume => system.controlsVolume ? 100 : _config.volumePercent;
+
+  /// Anonsu yapar: istenirse önce ding-dong, sonra kayıt ya da sese çevrilmiş
+  /// yazı (ding-dong çalarken hazırlanır). Anons sürerken programlı ziller
+  /// bekletilir (tören gibi); bitince tolerans içindeyse çalar. Sorun olursa
+  /// açıklama döner, yerine zil çalmaz.
+  Future<String?> playAnnouncement(SpokenAnnouncement a, {bool log = true}) async {
+    if (_emergencyActive) return 'Acil durum alarmı çalarken anons yapılamaz.';
+    if (_ceremony != null) return '${_ceremony!.label} çalarken anons yapılamaz.';
+    if (a.isAudio && (a.path == null || !File(a.path!).existsSync())) {
+      return '"${a.name}" anonsunun ses dosyası bulunamadı.';
+    }
+    if (!a.isAudio && (a.text ?? '').trim().isEmpty) return '"${a.name}" anonsunun metni boş.';
+    await _stopAnnouncement();
+    _clearPreview();
+    _playId++;
+    _announcement = a;
+    _announcementBody = false;
+    _announcementPaused = false;
+    final file = a.isAudio ? Future.value(a.path!) : speechFileFor(a);
+    // Hata gövde başlarken ele alınır; anons ondan önce durdurulursa
+    // yakalanmamış hata sayılmasın.
+    unawaited(file.then((_) {}, onError: (_) {}));
+    _announcementFile = file;
+    _announcementGuard = Timer(maxCeremony, _endAnnouncement);
+    notifyListeners();
+    _ensureAudible(_config.volumePercent);
+    final at = _now();
+    final bell = BellEvent(
+      id: 'anons-${at.millisecondsSinceEpoch}',
+      time: ClockTime(at.hour, at.minute),
+      type: BellType.special,
+      label: 'Anons: ${a.name}',
+    );
+    try {
+      var chimed = false;
+      if (a.chime) {
+        try {
+          await player.play(chimeSound, volumePercent: _playerVolume);
+          chimed = true;
+        } catch (e, st) {
+          // Dikkat sesi çalınamazsa anons yine yapılır.
+          ErrorLog.write('anons dikkat sesi', e, st);
+        }
+      }
+      if (chimed) {
+        _chimeGuard = Timer(chimeMax, () => unawaited(_startAnnouncementBody()));
+      } else {
+        await _startAnnouncementBody(rethrowErrors: true);
+      }
+      if (log) _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.played));
+      return null;
+    } catch (e) {
+      _endAnnouncement();
+      if (log) _onLog(BellLogEntry(at: _now(), bell: bell, outcome: BellOutcome.failed, detail: '$e'));
+      return '"${a.name}" anonsu yapılamadı: $e';
+    }
+  }
+
+  Future<void> _startAnnouncementBody({bool rethrowErrors = false}) async {
+    final a = _announcement;
+    if (a == null || _announcementBody || _announcementPaused) return;
+    _chimeGuard?.cancel();
+    _chimeGuard = null;
+    _announcementBody = true;
+    final token = _announcementToken;
+    try {
+      final path = await _announcementFile!;
+      // Hazırlık sürerken anons durdurulduysa çalma.
+      if (token != _announcementToken || _announcement == null) return;
+      if (_announcementPaused) {
+        _pendingAnnouncementPath = path;
+        return;
+      }
+      await player.play(BellSound(id: 'anons-${a.id}', name: a.name, path: path), volumePercent: _playerVolume);
+    } catch (e, st) {
+      if (token != _announcementToken) return;
+      _endAnnouncement();
+      if (rethrowErrors) rethrow;
+      ErrorLog.write('anons', e, st);
+      final at = _now();
+      _onLog(BellLogEntry(
+        at: at,
+        bell: BellEvent(id: 'anons-${at.millisecondsSinceEpoch}', time: ClockTime(at.hour, at.minute), type: BellType.special, label: 'Anons: ${a.name}'),
+        outcome: BellOutcome.failed,
+        detail: '$e',
+      ));
+    }
+  }
+
+  /// Anonsu duraklatır.
+  Future<void> pauseAnnouncement() async {
+    if (_announcement == null || _announcementPaused) return;
+    _chimeGuard?.cancel();
+    _chimeGuard = null;
+    await player.pause();
+    _announcementPaused = true;
+    notifyListeners();
+  }
+
+  Future<void> resumeAnnouncement() async {
+    final a = _announcement;
+    if (a == null || !_announcementPaused) return;
+    final pending = _pendingAnnouncementPath;
+    _pendingAnnouncementPath = null;
+    _announcementPaused = false;
+    if (pending != null) {
+      await player.play(BellSound(id: 'anons-${a.id}', name: a.name, path: pending), volumePercent: _playerVolume);
+    } else {
+      await player.resume();
+    }
+    if (!_announcementBody) _chimeGuard = Timer(chimeMax, () => unawaited(_startAnnouncementBody()));
+    notifyListeners();
+  }
+
+  void _endAnnouncement() {
+    // Süren hazırlık (sese çevirme) artık bu anonsa ait değil.
+    _announcementToken++;
+    _pendingAnnouncementPath = null;
+    _announcementGuard?.cancel();
+    _announcementGuard = null;
+    _chimeGuard?.cancel();
+    _chimeGuard = null;
+    if (_announcement == null) return;
+    _announcement = null;
+    _announcementFile = null;
+    _announcementBody = false;
+    _announcementPaused = false;
+    notifyListeners();
+  }
+
+  /// Süren anonsu bırakır (çaları çağıran durdurur ya da yeni ses keser).
+  Future<void> _stopAnnouncement() async {
+    if (_announcement == null) return;
+    _announcementToken++;
+    _endAnnouncement();
+  }
+
+  /// Sese çevrilen yazılar; aynı metin için iki kez çevrilmesin.
+  final Map<String, Future<String>> _speechJobs = {};
+
+  String _speechBase(String id, String text) => '$_soundsDirPath${Platform.pathSeparator}okuma-$id-'
+      '${sha1.convert(utf8.encode(text)).toString().substring(0, 12)}';
+
+  /// Yazıdan okunan anonsun ses dosyası. Metin değişmedikçe yeniden üretilmez.
+  Future<String> speechFileFor(SpokenAnnouncement a) {
+    final base = _speechBase(a.id, a.text!);
+    for (final ext in const ['wav', 'aiff']) {
+      final f = File('$base.$ext');
+      if (f.existsSync() && f.lengthSync() > 0) return Future.value(f.path);
+    }
+    // Dikkat: whenComplete'e Future döndüren bir geri çağırma verilirse onu
+    // bekler; remove() bu işin kendisini döndürdüğü için gövde bloklu yazıldı.
+    return _speechJobs.putIfAbsent(base, () => speech.synthesize(a.text!, base).whenComplete(() {
+          _speechJobs.remove(base);
+        }));
+  }
+
+  /// Anonsun sese çevrilmiş eski dosyalarını siler ([keep] metninki kalır).
+  void clearSpeechFiles(String id, {String? keep}) {
+    final keepBase = keep == null ? null : _speechBase(id, keep);
+    try {
+      for (final f in Directory(_soundsDirPath).listSync().whereType<File>()) {
+        final name = f.path.split(RegExp(r'[/\\]')).last;
+        if (!name.startsWith('okuma-$id-')) continue;
+        if (keepBase != null && f.path.startsWith(keepBase)) continue;
+        f.deleteSync();
+      }
+    } catch (_) {}
+  }
+
+  /// Kaydedilen yazıyı arka planda sese çevirir; ilk anons beklemesin.
+  void _prepareSpeech(SpokenAnnouncement a) {
+    if (a.isAudio) return;
+    unawaited(speechFileFor(a).then((_) {}, onError: (Object e, StackTrace st) => ErrorLog.write('yazıyı sese çevirme', e, st)));
+  }
+
+  String get _soundsDirPath {
+    final dir = Directory('${repository.file.parent.path}${Platform.pathSeparator}sesler')..createSync(recursive: true);
+    return dir.path;
+  }
+
+  String _newAnnouncementId() => 'a${DateTime.now().microsecondsSinceEpoch}';
+
+  Future<SpokenAnnouncement?> _addAnnouncement(SpokenAnnouncement a) async {
+    final ok = await updateConfig(_config.copyWith(spokenAnnouncements: [..._config.spokenAnnouncements, a]));
+    if (ok) return a;
+    if (a.path != null) {
+      try {
+        File(a.path!).deleteSync();
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// Ses dosyasını anons olarak ekler; dosya uygulama klasörüne kopyalanır.
+  /// Kaydedilemezse (ör. kilitli) null döner.
+  Future<SpokenAnnouncement?> addAnnouncementFromFile(String sourcePath, {required String name, bool chime = true}) async {
+    final id = _newAnnouncementId();
+    final dest = '$_soundsDirPath${Platform.pathSeparator}anons-$id.${_extensionOf(sourcePath)}';
+    File(sourcePath).copySync(dest);
+    return _addAnnouncement(
+        SpokenAnnouncement(id: id, name: name, source: AnnouncementSource.file, path: dest, chime: chime));
+  }
+
+  /// Mikrofon kaydının yazılacağı geçici dosya.
+  String newRecordingPath() =>
+      '$_soundsDirPath${Platform.pathSeparator}kayit-${DateTime.now().microsecondsSinceEpoch}.wav';
+
+  /// Biten mikrofon kaydını anons olarak saklar.
+  Future<SpokenAnnouncement?> addAnnouncementFromRecording(String recordedPath,
+      {required String name, bool chime = true}) async {
+    final id = _newAnnouncementId();
+    final dest = '$_soundsDirPath${Platform.pathSeparator}anons-$id.wav';
+    File(recordedPath).renameSync(dest);
+    return _addAnnouncement(
+        SpokenAnnouncement(id: id, name: name, source: AnnouncementSource.recording, path: dest, chime: chime));
+  }
+
+  /// Yazıdan okunacak anons ekler.
+  Future<SpokenAnnouncement?> addSpeechAnnouncement({required String name, required String text, bool chime = true}) async {
+    final a = await _addAnnouncement(SpokenAnnouncement(
+        id: _newAnnouncementId(), name: name, source: AnnouncementSource.speech, text: text, chime: chime));
+    if (a != null) _prepareSpeech(a);
+    return a;
+  }
+
+  /// Anonsun adını, metnini ya da dikkat sesini değiştirir.
+  Future<bool> updateSpokenAnnouncement(SpokenAnnouncement a) async {
+    final ok = await updateConfig(_config.copyWith(spokenAnnouncements: [
+      for (final x in _config.spokenAnnouncements) x.id == a.id ? a : x,
+    ]));
+    if (ok && !a.isAudio) {
+      clearSpeechFiles(a.id, keep: a.text);
+      _prepareSpeech(a);
+    }
+    return ok;
+  }
+
+  /// Anonsun kullanıldığı etkinlikler.
+  List<String> announcementUsages(String id) =>
+      [for (final ev in _config.specialEvents) if (ev.announcementId == id) ev.name];
+
+  /// Anonsu siler; onu yapan etkinlikler kapatılır (yerine zil çalmasın).
+  Future<void> deleteSpokenAnnouncement(SpokenAnnouncement a) async {
+    if (_announcement?.id == a.id) await stopSound();
+    final ok = await updateConfig(_config.copyWith(
+      spokenAnnouncements: _config.spokenAnnouncements.where((x) => x.id != a.id).toList(),
+      specialEvents: [
+        for (final ev in _config.specialEvents)
+          ev.announcementId == a.id ? ev.copyWith(announcementId: () => null, enabled: false) : ev,
+      ],
+    ));
+    if (!ok) return;
+    clearSpeechFiles(a.id);
+    if (a.path == null) return;
+    try {
+      File(a.path!).deleteSync();
+    } catch (_) {}
   }
 
   /// Ayarı hemen geçerli kılar ve diske kaydeder; kaydedilemezse false
@@ -642,6 +958,7 @@ class AppController extends ChangeNotifier {
   Future<String?> previewSound(BellSound sound, {int? stopAfter}) async {
     if (_emergencyActive) return 'Acil durum alarmı çalarken ses dinletilemez';
     if (_ceremony != null) return '${_ceremony!.label} çalarken ses dinletilemez';
+    if (_announcement != null) return 'Anons sürerken ses dinletilemez';
     _ensureAudible(_config.volumePercent);
     _previewId = sound.id;
     _previewPaused = false;
@@ -921,6 +1238,11 @@ class AppController extends ChangeNotifier {
 
   /// Etkinliğin sesini şimdi çalar (deneme).
   Future<String?> testEvent(SpecialEvent event) {
+    final announcement = event.announcementId == null ? null : _config.announcementById(event.announcementId!);
+    if (event.announcementId != null) {
+      if (announcement == null) return Future.value('Bu etkinliğin anonsu silinmiş.');
+      return playAnnouncement(announcement);
+    }
     final bell = event.toBellEvent();
     return previewSound(_config.soundFor(bell) ?? fallbackBell, stopAfter: event.loopSeconds);
   }
@@ -951,6 +1273,14 @@ class AppController extends ChangeNotifier {
   // ---- İç işleyiş ---------------------------------------------------------
 
   Future<String?> _ring(BellEvent bell) async {
+    final announcementId = bell.announcementId;
+    if (announcementId != null) {
+      final a = _config.announcementById(announcementId);
+      if (a == null) throw Exception('Anons bulunamadı (silinmiş olabilir)');
+      final error = await playAnnouncement(a, log: false);
+      if (error != null) throw Exception(error);
+      return null;
+    }
     // Zil, dinlenen sesi keser.
     _clearPreview();
     _ensureAudible(_config.volumePercent);
@@ -1106,6 +1436,8 @@ class AppController extends ChangeNotifier {
     _scheduler.stop();
     _volumeTimer?.cancel();
     _ceremonyGuard?.cancel();
+    _announcementGuard?.cancel();
+    _chimeGuard?.cancel();
     _completedSub?.cancel();
     super.dispose();
   }

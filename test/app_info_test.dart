@@ -59,7 +59,7 @@ void main() {
   });
 
   for (final size in const [Size(1024, 640), Size(1280, 640)]) {
-    testWidgets('kilit açıkken ${size.width.toInt()}×640 kenar menüsü taşmaz, Hakkında görünür', (tester) async {
+    testWidgets('kilit açıkken ${size.width.toInt()}×640 kenar menüsü taşmaz, Hakkında kaydırınca açılır', (tester) async {
       final (c, _) = await pumpOkulZili(tester, now: now, size: size, passwordHasher: const FastPasswordHasher());
       // Kayıt gerçek dosya G/Ç'si yapar: gerçek bekleme ile kareyi dönüşümlü ilerlet.
       var done = false;
@@ -72,8 +72,10 @@ void main() {
       expect(c.isLockEnabled, isTrue);
       expect(find.text('Kilitle'), size.width >= 1180 ? findsOneWidget : findsNothing);
       expect(tester.takeException(), isNull);
+      // Kısa pencerede menü kayar; Hakkında kaydırınca ulaşılır.
       final about = size.width >= 1180 ? find.text('Sürüm ${AppInfo.version} · Hakkında') : find.byIcon(Icons.info_outline);
-      expect(tester.getBottomLeft(about).dy, lessThanOrEqualTo(640));
+      await tapVisible(tester, about);
+      expect(find.text('İrfan Yücel ÜZÜM'), findsOneWidget);
     });
   }
 

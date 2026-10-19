@@ -124,7 +124,7 @@ void main() {
   testWidgets('kilitliyken Ders programı şifre ister; yanlışta açılmaz, doğruda açılır', (tester) async {
     final (c, nav) = await pumpOkulZili(tester, now: now);
     await withLock(tester, c);
-    expect(find.byIcon(Icons.lock), findsNWidgets(6));
+    expect(find.byIcon(Icons.lock), findsNWidgets(7));
 
     await tester.tap(find.text('Ders programı'));
     await settle(tester);

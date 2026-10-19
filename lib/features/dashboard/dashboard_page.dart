@@ -8,6 +8,7 @@ import '../../core/scheduler/bell_log.dart';
 import '../../core/scheduler/day_schedule.dart';
 import '../../data/models/app_config.dart';
 import '../../data/models/bell_event.dart';
+import '../../data/models/spoken_announcement.dart';
 import '../../ui/navigation.dart';
 import '../../ui/theme.dart';
 import '../../ui/widgets.dart';
@@ -131,6 +132,19 @@ class _DashboardPageState extends State<DashboardPage> {
         foreground: Colors.white,
         icon: Icons.flag_outlined,
         text: '${ceremony.label} çalıyor. Ziller kayıt bitince çalar.',
+        action: FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.lessonText, minimumSize: const Size(0, 44)),
+          onPressed: c.stopSound,
+          child: const Text('Durdur'),
+        ),
+      ));
+    }
+    if (c.announcementPlaying case final a?) {
+      add(_Banner(
+        background: AppColors.lesson,
+        foreground: Colors.white,
+        icon: Icons.record_voice_over_outlined,
+        text: 'Anons: ${a.name}. Ziller anons bitince çalar.',
         action: FilledButton(
           style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.lessonText, minimumSize: const Size(0, 44)),
           onPressed: c.stopSound,
@@ -424,6 +438,13 @@ class _QuickActions extends StatelessWidget {
 
   final AppController controller;
 
+  Future<void> _startAnnouncement(BuildContext context, SpokenAnnouncement a) async {
+    final error = await controller.playAnnouncement(a);
+    if (error != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
   Future<void> _startCeremony(BuildContext context, Ceremony kind) async {
     final error = await controller.startCeremony(kind);
     if (error != null && context.mounted) {
@@ -444,7 +465,7 @@ class _QuickActions extends StatelessWidget {
             runSpacing: 12,
             children: [
               FilledButton.icon(
-                onPressed: c.emergencyActive || c.ceremonyPlaying != null ? null : c.ringNow,
+                onPressed: c.emergencyActive || c.ceremonyPlaying != null || c.announcementPlaying != null ? null : c.ringNow,
                 icon: const Icon(Icons.notifications_active_outlined),
                 label: const Text('Şimdi zil çal'),
               ),
@@ -468,6 +489,28 @@ class _QuickActions extends StatelessWidget {
                         onPressed: () => _startCeremony(context, kind),
                         child: Text(c.config.ceremonySound(kind) == null ? '${kind.label} (yüklenmedi)' : kind.label),
                       ),
+                  ],
+                ),
+              if (c.announcementPlaying != null)
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.lessonText),
+                  onPressed: c.stopSound,
+                  icon: const Icon(Icons.stop_rounded),
+                  label: const Text('Anonsu durdur'),
+                )
+              else
+                MenuAnchor(
+                  builder: (context, menu, _) => OutlinedButton.icon(
+                    onPressed: c.emergencyActive ? null : () => menu.isOpen ? menu.close() : menu.open(),
+                    icon: const Icon(Icons.record_voice_over_outlined),
+                    label: const Row(mainAxisSize: MainAxisSize.min, children: [Text('Anons'), SizedBox(width: 4), Icon(Icons.expand_more, size: 18)]),
+                  ),
+                  menuChildren: [
+                    if (c.config.spokenAnnouncements.isEmpty)
+                      const MenuItemButton(onPressed: null, child: Text('Henüz anons yok; Anonslar sayfasından ekleyin'))
+                    else
+                      for (final a in c.config.spokenAnnouncements)
+                        MenuItemButton(onPressed: () => _startAnnouncement(context, a), child: Text(a.name)),
                   ],
                 ),
               if (c.isMuted)

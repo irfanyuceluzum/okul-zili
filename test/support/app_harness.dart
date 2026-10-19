@@ -13,6 +13,8 @@ import 'package:okul_zili/main.dart';
 import 'package:okul_zili/platform/audio_file_picker.dart';
 import 'package:okul_zili/platform/bell_player.dart';
 import 'package:okul_zili/platform/config_file_picker.dart';
+import 'package:okul_zili/platform/speech.dart';
+import 'package:okul_zili/platform/voice_recorder.dart';
 import 'package:okul_zili/ui/navigation.dart';
 
 class SilentPlayer implements BellPlayer {
@@ -30,6 +32,64 @@ class SilentPlayer implements BellPlayer {
 
   @override
   Stream<void> get completed => const Stream.empty();
+}
+
+/// Yazıyı sese çevirmek yerine küçük bir WAV dosyası yazar; çevrilen metinleri kaydeder.
+class FakeSpeech implements SpeechSynthesizer {
+  FakeSpeech({this.turkish = true});
+
+  final bool? turkish;
+  final spoken = <String>[];
+
+  /// Doluysa çeviri bu tamamlanana kadar bekler (yavaş konuşma motoru).
+  Completer<void>? gate;
+
+  /// Doluysa çeviri bu hatayla başarısız olur.
+  Object? failWith;
+
+  @override
+  Future<String> synthesize(String text, String outBase) async {
+    spoken.add(text);
+    await gate?.future;
+    if (failWith != null) throw failWith!;
+    final out = '$outBase.wav';
+    File(out).writeAsBytesSync([82, 73, 70, 70, 0, 0, 0, 0]);
+    return out;
+  }
+
+  @override
+  Future<bool?> hasTurkishVoice() async => turkish;
+}
+
+/// Mikrofon yerine: başlatınca dosyayı oluşturur, durdurunca yolunu döndürür.
+class FakeRecorder implements VoiceRecorder {
+  FakeRecorder({this.allowed = true});
+
+  bool allowed;
+  String? _path;
+
+  @override
+  Future<bool> hasPermission() async => allowed;
+
+  @override
+  Future<void> start(String path) async {
+    _path = path;
+    File(path).writeAsBytesSync([0, 1, 2, 3]);
+  }
+
+  @override
+  Future<String?> stop() async {
+    final path = _path;
+    _path = null;
+    return path;
+  }
+
+  @override
+  Future<void> cancel() async {
+    final path = _path;
+    _path = null;
+    if (path != null && File(path).existsSync()) File(path).deleteSync();
+  }
 }
 
 /// Testlerde isolate'sız, 1000 iterasyonlu hızlı parola hesabı.
@@ -102,6 +162,8 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
   ConfigFilePicker? pickConfigFile,
   ExportPathPicker? pickExportPath,
   PasswordHasher? passwordHasher,
+  SpeechSynthesizer? speech,
+  VoiceRecorder? recorder,
 
   /// Verilirse [now] yerine bu saat kullanılır (testte ileri sarmak için).
   DateTime Function()? clock,
@@ -128,6 +190,8 @@ Future<(AppController, ValueNotifier<AppPage>)> pumpOkulZili(
     pickConfigFile: pickConfigFile,
     pickExportPath: pickExportPath,
     passwordHasher: passwordHasher ?? const FastPasswordHasher(),
+    speech: speech ?? FakeSpeech(),
+    recorder: recorder ?? FakeRecorder(),
   );
   final navigation = ValueNotifier(page);
   await tester.pumpWidget(OkulZiliApp(

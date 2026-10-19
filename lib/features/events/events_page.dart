@@ -176,9 +176,11 @@ class EventsPage extends StatelessWidget {
                     for (final e in events)
                       _EventRow(
                         event: e,
-                        soundName: e.soundId != null && config.soundById(e.soundId!) != null
-                            ? config.soundById(e.soundId!)!.name
-                            : '${config.soundFor(e.toBellEvent())?.name ?? 'Klasik zil'} (varsayılan)',
+                        soundName: e.announcementId != null
+                            ? 'Anons: ${config.announcementById(e.announcementId!)?.name ?? '(silinmiş)'}'
+                            : e.soundId != null && config.soundById(e.soundId!) != null
+                                ? config.soundById(e.soundId!)!.name
+                                : '${config.soundFor(e.toBellEvent())?.name ?? 'Klasik zil'} (varsayılan)',
                         onToggle: (on) => controller.setEventEnabled(e.id, on),
                         onTest: () => _test(context, e),
                         onEdit: () => _open(context, initial: e),
@@ -276,12 +278,16 @@ class _EventDialogState extends State<EventDialog> {
   late int _month = i?.month ?? widget.today.month;
   late int _day = i?.day ?? widget.today.day;
   late DateTime _date = i?.date ?? widget.today;
-  late String? _soundId = i?.soundId;
+  /// Ses kimliği ya da `anons:` önekli anons kimliği.
+  late String? _soundId = i?.announcementId != null ? '$_announcementPrefix${i!.announcementId}' : i?.soundId;
   late int? _loopSeconds = i?.loopSeconds;
   late final bool _enabled = i?.enabled ?? true;
   String? _error;
 
   static const _loopOptions = [15, 30, 60, 90, 120];
+  static const _announcementPrefix = 'anons:';
+
+  bool get _isAnnouncement => _soundId?.startsWith(_announcementPrefix) ?? false;
   static const _short = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
   @override
@@ -318,8 +324,9 @@ class _EventDialogState extends State<EventDialog> {
         month: _recurrence == Recurrence.yearly ? _month : null,
         day: _recurrence == Recurrence.yearly ? _day : null,
         date: _recurrence == Recurrence.once ? _date : null,
-        soundId: _soundId,
-        loopSeconds: _loopSeconds,
+        soundId: _isAnnouncement ? null : _soundId,
+        announcementId: _isAnnouncement ? _soundId!.substring(_announcementPrefix.length) : null,
+        loopSeconds: _isAnnouncement ? null : _loopSeconds,
         enabled: _enabled,
       ),
     );
@@ -338,7 +345,11 @@ class _EventDialogState extends State<EventDialog> {
   @override
   Widget build(BuildContext context) {
     final sounds = widget.config.sounds;
-    final soundValue = sounds.any((s) => s.id == _soundId) ? _soundId : null;
+    final announcements = widget.config.spokenAnnouncements;
+    final soundValue = sounds.any((s) => s.id == _soundId) ||
+            announcements.any((a) => '$_announcementPrefix${a.id}' == _soundId)
+        ? _soundId
+        : null;
     const label = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.inkSecondary);
     return AlertDialog(
       title: Text(widget.isNew || i == null ? 'Etkinlik ekle' : 'Etkinliği düzenle'),
@@ -444,23 +455,27 @@ class _EventDialogState extends State<EventDialog> {
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Varsayılan etkinlik sesi')),
                   for (final s in sounds) DropdownMenuItem(value: s.id, child: Text(s.name)),
+                  for (final a in announcements)
+                    DropdownMenuItem(value: '$_announcementPrefix${a.id}', child: Text('Anons: ${a.name}')),
                 ],
               ),
               const Text(
-                'İstiklal Marşı gibi kayıtları önce "Zil sesleri" sayfasından ekleyin.',
+                'İstiklal Marşı gibi kayıtları "Zil sesleri", sesli anonsları "Anonslar" sayfasından ekleyin.',
                 style: TextStyle(fontSize: 13, color: AppColors.inkMuted),
               ),
-              const SizedBox(height: 16),
-              const Text('Çalma', style: label),
-              DropdownButton<int?>(
-                isExpanded: true,
-                value: _loopOptions.contains(_loopSeconds) ? _loopSeconds : null,
-                onChanged: (v) => setState(() => _loopSeconds = v),
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('Bir kez çal')),
-                  for (final s in _loopOptions) DropdownMenuItem(value: s, child: Text('$s saniye boyunca tekrarla')),
-                ],
-              ),
+              if (!_isAnnouncement) ...[
+                const SizedBox(height: 16),
+                const Text('Çalma', style: label),
+                DropdownButton<int?>(
+                  isExpanded: true,
+                  value: _loopOptions.contains(_loopSeconds) ? _loopSeconds : null,
+                  onChanged: (v) => setState(() => _loopSeconds = v),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Bir kez çal')),
+                    for (final s in _loopOptions) DropdownMenuItem(value: s, child: Text('$s saniye boyunca tekrarla')),
+                  ],
+                ),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(_error!, style: const TextStyle(color: AppColors.dangerText, fontWeight: FontWeight.w600)),

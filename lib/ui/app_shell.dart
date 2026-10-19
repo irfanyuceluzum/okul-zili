@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
 import '../core/app_info.dart';
+import '../features/announcements/announcements_page.dart';
 import '../features/calendar/calendar_page.dart';
 import '../features/dashboard/dashboard_page.dart';
 import '../features/events/events_page.dart';
@@ -78,6 +79,7 @@ class _AppShellState extends State<AppShell> {
     AppPage.calendar,
     AppPage.events,
     AppPage.sounds,
+    AppPage.announcements,
     AppPage.notices,
     AppPage.settings,
   };
@@ -132,6 +134,7 @@ class _AppShellState extends State<AppShell> {
         AppPage.calendar => CalendarPage(controller: controller),
         AppPage.events => EventsPage(controller: controller),
         AppPage.sounds => SoundsPage(controller: controller),
+        AppPage.announcements => AnnouncementsPage(controller: controller),
         AppPage.notices => NoticesPage(controller: controller),
         AppPage.logs => LogsPage(controller: controller),
         AppPage.settings => SettingsPage(controller: controller, windowControls: windowControls),
@@ -160,6 +163,7 @@ class _Sidebar extends StatelessWidget {
     AppPage.calendar,
     AppPage.events,
     AppPage.sounds,
+    AppPage.announcements,
     AppPage.notices,
     AppPage.logs,
     AppPage.settings,

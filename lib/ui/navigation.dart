@@ -6,6 +6,7 @@ enum AppPage {
   calendar('Takvim ve tatiller', Icons.calendar_month_outlined, Icons.calendar_month),
   events('Özel etkinlikler', Icons.star_outline, Icons.star),
   sounds('Zil sesleri', Icons.music_note_outlined, Icons.music_note),
+  announcements('Anonslar', Icons.record_voice_over_outlined, Icons.record_voice_over),
   notices('Duyuru ve nöbet', Icons.campaign_outlined, Icons.campaign),
   logs('Kayıtlar', Icons.list_alt_outlined, Icons.list_alt),
   settings('Ayarlar', Icons.tune_outlined, Icons.tune),

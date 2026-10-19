@@ -116,6 +116,8 @@ class BellScheduler {
     for (final bell in day.bells) {
       final at = day.timeOf(bell);
       if (at.isAfter(now)) break;
+      // Aynı turda başlayan anons/tören sonraki zil tarafından kesilmesin.
+      if (deferWhile?.call() ?? false) return const Duration(seconds: 1);
 
       final key = keyFor(day.date, bell);
       if (!_handled.add(key)) continue;

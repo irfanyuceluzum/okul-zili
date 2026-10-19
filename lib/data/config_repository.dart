@@ -114,7 +114,10 @@ class ConfigRepository {
       for (final s in config.sounds)
         s.isAsset ? s : BellSound(id: s.id, name: s.name, path: _toRelative(s.path), isAsset: false),
     ];
-    return encoder.convert(config.copyWith(sounds: sounds).toJson());
+    final announcements = [
+      for (final a in config.spokenAnnouncements) a.path == null ? a : a.copyWith(path: _toRelative(a.path!)),
+    ];
+    return encoder.convert(config.copyWith(sounds: sounds, spokenAnnouncements: announcements).toJson());
   }
 
   String get _soundsPrefix => '${file.parent.path.replaceAll('\\', '/')}/sesler/';
@@ -142,7 +145,10 @@ class ConfigRepository {
       for (final s in config.sounds)
         s.isAsset ? s : BellSound(id: s.id, name: s.name, path: _toAbsolute(s.path), isAsset: false),
     ];
-    return config.copyWith(sounds: sounds);
+    final announcements = [
+      for (final a in config.spokenAnnouncements) a.path == null ? a : a.copyWith(path: _toAbsolute(a.path!)),
+    ];
+    return config.copyWith(sounds: sounds, spokenAnnouncements: announcements);
   }
 
   /// Verilen ayar dosyasını okur; bozuk/geçersizse fırlatır. Atlanan
