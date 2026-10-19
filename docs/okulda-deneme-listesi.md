@@ -1,12 +1,12 @@
-# Okul bilgisayarında elle deneme listesi (sürüm 0.5.0)
+# Okul bilgisayarında elle deneme listesi (sürüm 0.6.0)
 
 Bu maddeler yalnız Windows'ta denenebilir; Mac'teki otomatik testler bunları
 kapsamaz. Her maddenin yanına ✔ ya da sorunu yazın. Sorun çıkarsa
 **Kayıtlar** sayfasının ekran görüntüsünü ve ayar klasöründeki
 `hata_kayitlari.log` dosyasını saklayın.
 
-Kurulum dosyası: GitHub → Releases → **Okul Zili 0.5.0** →
-`OkulZili-Kurulum-0.5.0.exe` (https://github.com/irfanyuceluzum/okul-zili/releases/tag/v0.5.0).
+Kurulum dosyası: GitHub → Releases → **Okul Zili 0.6.0** →
+`OkulZili-Kurulum-0.6.0.exe` (https://github.com/irfanyuceluzum/okul-zili/releases/tag/v0.6.0).
 
 ## 1. Kurulum ve güncelleme
 - [ ] Önceki sürüm kuruluyken yeni kurulum dosyası açılınca çalışan Okul Zili kendiliğinden kapanıyor, kurulum hatasız bitiyor.
@@ -52,7 +52,7 @@ Kurulum dosyası: GitHub → Releases → **Okul Zili 0.5.0** →
 - [ ] Başka bir ayarı değiştirip yedekten geri yükleyince eski hâl geliyor; "Geri al" çalışıyor.
 - [ ] İçe aktarmada onay penceresi özet gösteriyor; şifre kilidi değişmiyor.
 
-## 7. Bildirim (PR #1 birleştirildikten sonra)
+## 7. Windows bildirimi
 - [ ] Pencere gizliyken bir sorun olunca (ör. yüklenen ses dosyasını klasörden silip o zilin saatini bekleyin) Windows bildirimi geliyor.
 - [ ] Bildirime tıklayınca Kayıtlar sayfası açılıyor.
 - [ ] Bildirim gelmese bile tepsi ipucu "DİKKAT" yazıyor ve pencere odak çalmadan öne geliyor.

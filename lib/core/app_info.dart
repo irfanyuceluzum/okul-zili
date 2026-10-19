@@ -4,7 +4,7 @@
 /// ikisinin eşleştiğini denetler.
 abstract final class AppInfo {
   static const name = 'Okul Zili';
-  static const version = '0.5.0';
+  static const version = '0.6.0';
   static const developer = 'İrfan Yücel ÜZÜM';
   static const sourceUrl = 'https://github.com/irfanyuceluzum/okul-zili';
   static const releasesUrl = '$sourceUrl/releases';
